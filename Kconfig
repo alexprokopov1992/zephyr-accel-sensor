@@ -3,8 +3,14 @@
 # Copyright (c) 2021 Advanced Climate Systems
 # SPDX-License-Identifier: Apache-2.0
 
-config BADEN_ACCEL_SENSOR
+config ZEPHYR_ACCEL_SENSOR
 	bool "Accelerometer Sensor"
 	select I2C
 	help
 	  Enable driver for Accelerometer Sensor. Tilt, Move, etc.
+
+config ACCEL_SENSOR_INIT_PRIORITY
+	int "Accelerometer Sensor Initialization Priority"
+	default 90
+	help
+	  Priority of the Accelerometer Sensor initialization.

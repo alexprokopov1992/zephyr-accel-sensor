@@ -1,4 +1,4 @@
-#define DT_DRV_COMPAT baden_accel_sensor
+#define DT_DRV_COMPAT zephyr_accel_sensor
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/i2c.h>
@@ -11,8 +11,16 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 
 static int init(const struct device *dev)
 {
-	LOG_DBG("Initializing Accelerometer Sensor");
-	// const struct accel_sensor_config *cfg = dev->config;
+	const struct accel_sensor_config *cfg = dev->config;
+	LOG_DBG("Initializing Accelerometer Sensor (%s)", dev->name);
+
+	const struct device *adev = cfg->accel_dev;
+	if (!device_is_ready(adev)) {
+		LOG_ERR("Accelerometer device %s not ready", adev->name);
+		return -ENODEV;
+	}
+	
+	LOG_DBG("Accelerometer device: %s is ready", adev->name);
 	// struct accel_sensor_data *data = dev->data;
 	int rc;
 
@@ -69,10 +77,12 @@ static const struct accel_sensor_driver_api driver_api = {
 		.sampling_period_ms = DT_INST_PROP(inst, sampling_period_ms)		\
 	};											                        \
 	static const struct accel_sensor_config config_##inst = {			\
-		/*.bus = I2C_DT_SPEC_INST_GET(inst),*/ 					        \
+		.accel_dev = DEVICE_DT_GET(DT_PARENT(DT_DRV_INST(inst))), 			\
 	};											                        \
 												                        \
 	DEVICE_DT_INST_DEFINE(inst, init, NULL, &data_##inst, &config_##inst,	\
-			      POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY, &driver_api);
+			      POST_KERNEL, CONFIG_ACCEL_SENSOR_INIT_PRIORITY, &driver_api);
+
+// CONFIG_KERNEL_INIT_PRIORITY_DEVICE
 
 DT_INST_FOREACH_STATUS_OKAY(ACCEL_SENSOR_DEFINE);
