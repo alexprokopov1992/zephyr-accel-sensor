@@ -1,4 +1,4 @@
-name: sensirion_drivers
+name: zephyr_accel_sensor
 build:
   cmake: .
   kconfig: Kconfig
