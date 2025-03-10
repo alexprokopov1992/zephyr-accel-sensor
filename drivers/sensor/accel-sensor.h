@@ -4,7 +4,8 @@
 #include <zephyr/device.h>
 
 struct accel_sensor_config {
-	const struct i2c_dt_spec bus;
+	// const struct i2c_dt_spec bus;
+	const struct device *accel_dev;
 };
 
 struct accel_sensor_data {
