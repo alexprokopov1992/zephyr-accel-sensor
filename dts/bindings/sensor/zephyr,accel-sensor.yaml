@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 description: Accelerometer sensor driver for Baden Sensors
 
-compatible: "baden,accel-sensor"
+compatible: "zephyr,accel-sensor"
 
+include: base.yaml
 include: i2c-device.yaml
 
 properties:
-    sample-period-ms:
+    sampling-period-ms:
       type: int
       required: false
       default: 100
@@ -16,7 +17,7 @@ properties:
         configured with this value on start up. This values must
         be in the rang [10; 1800]. This value can be changed at run time.
     accelerometer:
-      type: handle
+      type: phandle
       required: false
       description: |
         Handle to the accelerometer device
