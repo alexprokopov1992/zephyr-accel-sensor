@@ -8,8 +8,16 @@ struct accel_sensor_config {
 	const struct device *accel_dev;
 };
 
+typedef struct {
+	float x, y, z;
+} _Vector3;
+
 struct accel_sensor_data {
 	uint16_t sampling_period_ms;
+	struct k_work_delayable dwork;
+	const struct device *accel_dev;
+	_Vector3 ref_acc;		// Еталонне положення пристрою
+	_Vector3 last_acc;		// Останнє виміряне прискорення
 };
 
 #if 0
@@ -37,7 +45,10 @@ typedef int (*sensor_attr_get_t)(const struct device *dev,
 
 #endif
 
+typedef int (*set_current_position_as_reference_t)(const struct device *dev);
+
 __subsystem struct accel_sensor_driver_api {
+	set_current_position_as_reference_t set_current_position_as_reference;
 	// sensor_attr_set_t attr_set;
 	// sensor_attr_get_t attr_get;
 	// sensor_trigger_set_t trigger_set;
@@ -46,3 +57,14 @@ __subsystem struct accel_sensor_driver_api {
 	// sensor_get_decoder_t get_decoder;
 	// sensor_submit_t submit;
 };
+
+static inline int accel_sensor_set_current_position_as_reference(const struct device *dev)
+{
+	const struct accel_sensor_driver_api *api = (const struct accel_sensor_driver_api *)dev->api;
+
+	if (api->set_current_position_as_reference == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->set_current_position_as_reference(dev);
+}

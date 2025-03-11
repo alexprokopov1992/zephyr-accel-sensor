@@ -11,7 +11,7 @@ properties:
   sampling-period-ms:
     type: int
     required: false
-    default: 100
+    default: 1000
     description: |
       The initial sample period in milliseconds. The sensor will be
       configured with this value on start up. This values must
