@@ -6,7 +6,7 @@
 # Subdirectories
 # add_subdirectory(drivers/sensor)
 zephyr_library()
-zephyr_library_sources(drivers/sensor/accel-sensor.c)
+zephyr_library_sources_ifdef(CONFIG_ZEPHYR_ACCEL_SENSOR drivers/sensor/accel-sensor.c)
 
 # Include headers
 zephyr_include_directories(drivers)

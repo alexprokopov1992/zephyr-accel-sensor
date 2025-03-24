@@ -9,7 +9,7 @@
 #include "accel-sensor.h"
 #include <math.h>
 
-LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_INF);
 
 #if !defined(M_PIf)
 #define M_PIf 3.1415927f
@@ -73,7 +73,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 
 	LOG_DBG(
 		"Current values: X:%.4f Y:%.4f Z:%.4f"
-		"Tilt angle: %.4f"
+		" Tilt angle: %.4f"
 		, (double)ax, (double)ay, (double)az
 		, (double)theta
 	);
