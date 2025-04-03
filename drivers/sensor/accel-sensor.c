@@ -92,18 +92,11 @@ static void adc_vbus_work_handler(struct k_work *work)
     float theta = angle_between_vectors(data->ref_acc, current_acc);
     // printk("Загальний кут нахилу: %.3f градусів\n", theta * (180.0f / M_PI));
 
-	// LOG_DBG(
-	// 	"Current values: X:%.4f Y:%.4f Z:%.4f"
-	// 	" Tilt angle: %.4f"
-	// 	, (double)ax, (double)ay, (double)az
-	// 	, (double)theta
-	// );
-
 	LOG_DBG(
-		"Current values: X:%d Y:%d Z:%d"
-		" Tilt angle: %d"
-		, (int)(ax*100), (int)(ay*100), (int)(az*100)
-		, (int)(theta/M_PIf*180)
+		"Current values: X:%.4f Y:%.4f Z:%.4f"
+		" Tilt angle: %.4f"
+		, (double)ax, (double)ay, (double)az
+		, (double)(theta/M_PIf*180)
 	);
 
 	// TODO: Add callback
@@ -250,8 +243,10 @@ static int _attr_get(const struct device *dev, enum sensor_channel chan,
 }
 #endif
 
-static int _attr_set(const struct device *dev, enum sensor_channel chan,
-	enum sensor_attribute attr, const struct sensor_value *val)
+static int _attr_set(const struct device *dev,
+    enum sensor_channel chan,
+    enum sensor_attribute attr,
+    const struct sensor_value *val)
 {
 	printk("attr_set called: chan=%d, attr=%d, val1=%d\n", chan, attr, val->val1);
 	struct accel_sensor_data *data = dev->data;
