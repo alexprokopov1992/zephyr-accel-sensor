@@ -13,6 +13,12 @@ enum accel_sensor_mode {
 
 enum accel_sensor_attrs {
     ACCEL_SENSOR_SPECIAL_ATTRS=64,
+	ACCEL_SENSOR_CHAN_XYZ,
+};
+
+enum accel_sensor_trigger_types {
+	ACCEL_WARN_TRIGGER,
+	ACCEL_MAIN_TRIGGER,
 };
 
 enum accel_sensor_channel {
@@ -83,17 +89,30 @@ typedef int (*sensor_attr_get_t)(const struct device *dev,
 
 typedef int (*set_current_position_as_reference_t)(const struct device *dev);
 typedef int (*set_sensor_settings_t)(const struct device *dev, int channel, int val1, int val2);
+typedef int (*sensor_trigger_set_t)(const struct device *dev, const struct sensor_trigger *trig, sensor_trigger_handler_t handler);
 
 __subsystem struct accel_sensor_driver_api {
 	set_current_position_as_reference_t set_current_position_as_reference;
 	set_sensor_settings_t attr_set;
+	sensor_trigger_set_t trigger_set;
 	// sensor_attr_get_t attr_get;
-	// sensor_trigger_set_t trigger_set;
 	// sensor_sample_fetch_t sample_fetch;
 	// sensor_channel_get_t channel_get;
 	// sensor_get_decoder_t get_decoder;
 	// sensor_submit_t submit;
 };
+
+
+static inline int accel_sensor_trigger_set(const struct device *dev, const struct sensor_trigger *trig,	sensor_trigger_handler_t handler)
+{
+	const struct accel_sensor_driver_api *api = (const struct accel_sensor_driver_api *)dev->api;
+
+	if (api->trigger_set == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->trigger_set(dev, trig, handler);
+}
 
 static inline int accel_sensor_attr_set(const struct device *dev, int channel, int val1, int val2)
 {

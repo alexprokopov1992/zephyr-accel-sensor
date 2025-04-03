@@ -290,6 +290,29 @@ static int _attr_get(const struct device *dev, enum sensor_channel chan,
 }
 #endif
 
+static int _trigger_set(const struct device *dev,
+	const struct sensor_trigger *trig,
+	sensor_trigger_handler_t handler)
+{
+	struct accel_sensor_data *data = dev->data;
+	if (trig == NULL || handler == NULL) return -EINVAL;
+	switch (trig->type) {
+		case ACCEL_WARN_TRIGGER:
+			data->warn_handler = handler;
+			data->warn_trigger = trig;
+			break;
+		case ACCEL_MAIN_TRIGGER:
+			data->main_handler = handler;
+			data->main_trigger = trig;
+			break;
+        default:
+            return -ENOTSUP;
+	}
+
+	return 0;
+}
+
+
 static int _attr_set(const struct device *dev,
     int chan,
     int val1,
@@ -310,16 +333,19 @@ static int _attr_set(const struct device *dev,
 				data->in_main_alert = false;
 				data->mode = ACCEL_SENSOR_MODE_ARMED;
 				k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
+				k_timer_stop(&data->increase_sensivity_timer);
 				break;
 			case (ACCEL_SENSOR_MODE_DISARMED):
 			    //зупинка таймера алярма
 			    data->mode = val1;
 				k_timer_stop(&data->refresh_current_pos_timer);
+				k_timer_stop(&data->increase_sensivity_timer);
 				break;
 			case (ACCEL_SENSOR_MODE_TURN_OFF):
 				//зупинка таймера алярма
 				data->mode = val1;
 				k_timer_stop(&data->refresh_current_pos_timer);
+				k_timer_stop(&data->increase_sensivity_timer);
 				break;
 			case (ACCEL_SENSOR_MODE_ALARM):
 				if (data->mode == ACCEL_SENSOR_MODE_ARMED) {
@@ -348,6 +374,7 @@ static int _attr_set(const struct device *dev,
 static const struct accel_sensor_driver_api driver_api = {
 	.set_current_position_as_reference = _save_current_positoin_as_reference,
 	.attr_set = _attr_set,
+	.trigger_set = _trigger_set,
 	// .sample_fetch = scd30_sample_fetch,
 	// .channel_get = scd30_channel_get,
 	// .attr_get = _attr_get,
