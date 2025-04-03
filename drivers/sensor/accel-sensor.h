@@ -57,6 +57,8 @@ struct accel_sensor_data {
 	int mode;
 	bool in_warn_alert;
 	bool in_main_alert;
+	bool max_warn_alert_level;
+	bool max_main_alert_level;
 	struct k_timer refresh_current_pos_timer;
 	struct k_timer increase_sensivity_timer;
 };

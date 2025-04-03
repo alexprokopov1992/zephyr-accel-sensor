@@ -71,6 +71,15 @@ int get_mma8652_val(const struct device *dev, struct sensor_value *val)
 }
 
 
+static void coarsering(const struct device *dev, int level)
+{
+	struct accel_sensor_data *data = dev->data;
+	if (level = 0)
+	{
+
+	}
+}
+
 static void adc_vbus_work_handler(struct k_work *work)
 {
     struct k_work_delayable *delayable = k_work_delayable_from_work(work);
@@ -98,11 +107,15 @@ static void adc_vbus_work_handler(struct k_work *work)
 	{
 		LOG_DBG("MAIN TRIGGER");
 		data->main_handler(dev, data->warn_trigger);
+		data->in_warn_alert = true;
+		data->in_main_alert = true;
+		coarsering(dev, 1);
 		
 	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone]){
 		LOG_DBG("WARN TRIGGER");
 		data->warn_handler(dev, data->warn_trigger);
-		
+		data->in_warn_alert = true;
+		coarsering(dev, 0);
 	}
 
 	LOG_DBG(
@@ -271,6 +284,8 @@ static int init(const struct device *dev)
 	LOG_DBG("Starting periodic measurements (%d ms)", data->sampling_period_ms);
 	data->in_warn_alert = false;
 	data->in_main_alert = false;
+	data->max_warn_alert_level = false;
+	data->max_main_alert_level = false;
 	data->mode = ACCEL_SENSOR_MODE_DISARMED;
 	k_timer_init(&data->refresh_current_pos_timer, refresh_current_pos_timer_handler, NULL);
 	k_timer_init(&data->increase_sensivity_timer, increase_sensivity_timer_handler, NULL);
@@ -331,6 +346,8 @@ static int _attr_set(const struct device *dev,
 				data->current_warn_zone = data->selected_warn_zone;
 				data->in_warn_alert = false;
 				data->in_main_alert = false;
+				data->max_warn_alert_level = false;
+				data->max_main_alert_level = false;
 				data->mode = ACCEL_SENSOR_MODE_ARMED;
 				k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
 				k_timer_stop(&data->increase_sensivity_timer);
