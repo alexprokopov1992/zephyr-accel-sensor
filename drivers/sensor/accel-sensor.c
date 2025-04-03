@@ -254,7 +254,6 @@ static int _attr_set(const struct device *dev, enum sensor_channel chan,
 	enum sensor_attribute attr, const struct sensor_value *val)
 {
 	struct accel_sensor_data *data = dev->data;
-	
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_MODE && attr == (enum sensor_attribute)ACCEL_SENSOR_SPECIAL_ATTRS) {
 		if (val->val1 == data->mode) return 0;
 
@@ -300,10 +299,11 @@ static int _attr_set(const struct device *dev, enum sensor_channel chan,
 
 static const struct accel_sensor_driver_api driver_api = {
 	.set_current_position_as_reference = _save_current_positoin_as_reference,
+	.attr_set = _attr_set,
 	// .sample_fetch = scd30_sample_fetch,
 	// .channel_get = scd30_channel_get,
 	// .attr_get = _attr_get,
-	.attr_set = _attr_set,
+	// .attr_set = _attr_set,
 };
 
 #define ACCEL_SENSOR_DEFINE(inst)									    \
