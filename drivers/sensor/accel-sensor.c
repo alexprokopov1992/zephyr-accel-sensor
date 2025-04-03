@@ -16,6 +16,7 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 #endif
 
 #define REFRESH_POS_TIME 3600
+#define INCREASE_SENSIVITY_TIME 1800
 
 static float warn_zone_start_angle = 1.0;
 static float warn_zone_step_angle = 2.0/9.0;
@@ -96,10 +97,12 @@ static void adc_vbus_work_handler(struct k_work *work)
 	if (pow_cos_theta < data->main_zone_cos_pow2[data->current_main_zone])
 	{
 		LOG_DBG("MAIN TRIGGER");
-		//main_trigger
+		data->main_handler(dev, data->warn_trigger);
+		
 	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone]){
 		LOG_DBG("WARN TRIGGER");
-		//warn_trigger
+		data->warn_handler(dev, data->warn_trigger);
+		
 	}
 
 	LOG_DBG(
@@ -221,6 +224,12 @@ static void refresh_current_pos_timer_handler(struct k_timer *timer)
 	k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 }
 
+static void increase_sensivity_timer_handler(struct k_timer *timer)
+{
+	struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, refresh_current_pos_timer);
+	k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+}
+
 static int init(const struct device *dev)
 {
 	const struct accel_sensor_config *cfg = dev->config;
@@ -264,6 +273,7 @@ static int init(const struct device *dev)
 	data->in_main_alert = false;
 	data->mode = ACCEL_SENSOR_MODE_DISARMED;
 	k_timer_init(&data->refresh_current_pos_timer, refresh_current_pos_timer_handler, NULL);
+	k_timer_init(&data->increase_sensivity_timer, increase_sensivity_timer_handler, NULL);
 	// TODO: Напевно треба перенести в макрос визначення змінної
 	k_work_init_delayable(&data->dwork, adc_vbus_work_handler);
 	k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));

@@ -52,6 +52,7 @@ struct accel_sensor_data {
 	bool in_warn_alert;
 	bool in_main_alert;
 	struct k_timer refresh_current_pos_timer;
+	struct k_timer increase_sensivity_timer;
 };
 
 
