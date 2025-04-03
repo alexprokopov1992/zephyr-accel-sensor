@@ -3,6 +3,26 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 
+
+enum accel_sensor_channel {
+    ACCEL_SENSOR_MODE=80,
+    ACCEL_SENSOR_CHANNEL_WARN_ZONE,
+    ACCEL_SENSOR_CHANNEL_MAIN_ZONE,
+    ACCEL_SENSOR_INCREASE_SENSIVITY_INTERVAL_SEC,
+};
+
+enum shock_sensor_attrs {
+    ACCEL_SENSOR_SPECIAL_ATTRS=64,
+};
+
+enum shock_sensor_mode {
+    SHOCK_SENSOR_MODE_ARMED=0,
+    SHOCK_SENSOR_MODE_DISARMED,
+    SHOCK_SENSOR_MODE_TURN_OFF,
+    SHOCK_SENSOR_MODE_ALARM,
+    SHOCK_SENSOR_MODE_ALARM_STOP,
+};
+
 struct accel_sensor_config {
 	// const struct i2c_dt_spec bus;
 	const struct device *accel_dev;
@@ -20,7 +40,7 @@ struct accel_sensor_data {
 	_Vector3 last_acc;		// Останнє виміряне прискорення
 };
 
-#if 0
+
 /**
  * @typedef sensor_attr_set_t
  * @brief Callback API upon setting a sensor's attributes
@@ -43,15 +63,14 @@ typedef int (*sensor_attr_get_t)(const struct device *dev,
 	enum sensor_attribute attr,
 	struct sensor_value *val);
 
-#endif
 
 typedef int (*set_current_position_as_reference_t)(const struct device *dev);
 
 __subsystem struct accel_sensor_driver_api {
 	set_current_position_as_reference_t set_current_position_as_reference;
-	// sensor_attr_set_t attr_set;
-	// sensor_attr_get_t attr_get;
-	// sensor_trigger_set_t trigger_set;
+	sensor_attr_set_t attr_set;
+	sensor_attr_get_t attr_get;
+	sensor_trigger_set_t trigger_set;
 	// sensor_sample_fetch_t sample_fetch;
 	// sensor_channel_get_t channel_get;
 	// sensor_get_decoder_t get_decoder;

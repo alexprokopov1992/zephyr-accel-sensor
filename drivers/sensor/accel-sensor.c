@@ -9,7 +9,7 @@
 #include "accel-sensor.h"
 #include <math.h>
 
-LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 
 #if !defined(M_PIf)
 #define M_PIf 3.1415927f
@@ -145,20 +145,29 @@ static int init(const struct device *dev)
 	return rc;
 }
 
-#if 0
+
 static int _attr_get(const struct device *dev, enum sensor_channel chan,
 	enum sensor_attribute attr, struct sensor_value *val)
 {
-	// struct scd30_data *data = dev->data;
+	struct scd30_data *data = dev->data;
+
 	return -ENOTSUP;
 }
 
 static int _attr_set(const struct device *dev, enum sensor_channel chan,
 	enum sensor_attribute attr, const struct sensor_value *val)
 {
+	struct accel_sensor_data *data = dev->data;
+
+	if (chan == SENSOR_CHAN_ACCEL_XYZ && attr == SENSOR_ATTR_SAMPLING_FREQUENCY) {
+        data->sampling_period_ms = val->val1;
+		LOG_INF("Setting sempling time: %dms", val->val1);
+        return 0;
+    }
+
 	return -ENOTSUP;
 }
-#endif
+
 
 static const struct accel_sensor_driver_api driver_api = {
 	.set_current_position_as_reference = _save_current_positoin_as_reference,
