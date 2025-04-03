@@ -24,12 +24,24 @@ float vector_length(_Vector3 v) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
+float vector_length_pow2(_Vector3 v) {
+    return v.x * v.x + v.y * v.y + v.z * v.z;
+}
+
 // Функція для обчислення косинуса кута між двома векторами
 float angle_between_vectors(_Vector3 v1, _Vector3 v2) {
     float dot_product = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
     float magnitude_product = vector_length(v1) * vector_length(v2);
     if (magnitude_product == 0) return 0.0f; // уникнення ділення на нуль
     return acosf(dot_product / magnitude_product); // кут у радіанах
+}
+
+float cospow2_between_vectors(_Vector3 v1, _Vector3 v2) {
+    float dot_product = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+	dot_product *= dot_product;
+    float magnitude_product = vector_length_pow2(v1) * vector_length_pow2(v2);
+    if (magnitude_product == 0) return 0.0f; // уникнення ділення на нуль
+    return dot_product / magnitude_product; // кут у радіанах
 }
 
 // Функція для обчислення кутів нахилу по осях
@@ -158,11 +170,18 @@ static void set_warn_zone(const struct device *dev, int zone)
 	data->selected_main_zone = 0;
 }
 
-static void set_main_zone(const struct device *dev, int zone)
+static void change_main_zone(const struct device *dev, int zone)
 {
 	struct accel_sensor_data *data = dev->data;
 	data->current_main_zone = zone;
 	data->selected_main_zone = zone;
+}
+
+static void change_warn_zone(const struct device *dev, int zone)
+{
+	struct accel_sensor_data *data = dev->data;
+	data->selected_warn_zone = zone;
+	data->current_warn_zone = zone;
 }
 
 // API
@@ -182,7 +201,7 @@ static int init(const struct device *dev)
 
 	init_warn_zones(dev);
 	set_warn_zone(dev, 0);
-	set_main_zone(dev,0);
+	change_main_zone(dev,0);
 	const struct device *adev = cfg->accel_dev;
 	if (!device_is_ready(adev)) {
 		LOG_ERR("Accelerometer device %s not ready", adev->name);
