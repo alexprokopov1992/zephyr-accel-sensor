@@ -201,16 +201,15 @@ static int init(const struct device *dev)
 	}
 	
 	LOG_DBG("Accelerometer device: %s is ready", adev->name);
-
+	
 	sensor_attr_set(adev, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_FULL_SCALE, &(struct sensor_value){ .val1 = 2, .val2 = 0 });
     sensor_attr_set(adev, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 50, .val2 = 0 });
-
 	init_warn_zones(dev);
 	set_warn_zone(dev, 0);
 	change_main_zone(dev,0);
-	
+
 	// struct accel_sensor_data *data = dev->data;
-	int rc;
+	int rc = 0;
 
     #if 0
 	rc = _set_sample_period(dev, data->sample_period_ms);
