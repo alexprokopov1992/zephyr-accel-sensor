@@ -15,6 +15,8 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 #define M_PIf 3.1415927f
 #endif
 
+static float warn_zone_start_angle = 1.0;
+static float warn_zone_step_angle = 2.0/9.0;
 
 // Функція для обчислення довжини вектора
 float vector_length(_Vector3 v) {
@@ -105,6 +107,44 @@ static void adc_vbus_work_handler(struct k_work *work)
     k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
 }
 
+static void init_warn_zones(const struct device *dev)
+{
+	struct accel_sensor_data *data = dev->data;
+	data->warn_zone_cos_pow2[0] = warn_zone_start_angle;
+	for (int i = 1; i < 10; i++)
+	{
+		data->warn_zone_cos_pow2[i] = data->warn_zone_cos_pow2[i-1] + warn_zone_step_angle;
+	}
+
+	for (int i = 0; i < 10; i++)
+	{
+		float angle_rad = data->warn_zone_cos_pow2[i] * (M_PIf / 180.0f);
+		data->warn_zone_cos_pow2[i] = cosf(angle_rad) * cosf(angle_rad);
+	}
+
+	return 0;
+}
+
+static void create_main_zones(const struct device *dev, int warn_zone)
+{
+	struct accel_sensor_data *data = dev->data;
+
+	
+
+
+	return 0;
+}
+
+static void set_warn_zone(const struct device *dev, int zone)
+{
+	struct accel_sensor_data *data = dev->data;
+	data->selected_warn_zone = zone;
+	data->current_warn_zone = zone;
+	create_main_zones(dev, zone);
+	data->current_main_zone = 0;
+	data->selected_main_zone = 0;
+
+}
 
 // API
 static int _save_current_positoin_as_reference(const struct device *dev)

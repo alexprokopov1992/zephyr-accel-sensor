@@ -18,7 +18,16 @@ struct accel_sensor_data {
 	const struct device *accel_dev;
 	_Vector3 ref_acc;		// Еталонне положення пристрою
 	_Vector3 last_acc;		// Останнє виміряне прискорення
+	float main_zone_steps[10];
+	float main_zone_cos_pow2[10];
+	float warn_zone_cos_pow2[10];
+	int selected_warn_zone;
+	int current_warn_zone;
+	int selected_main_zone;
+	int current_main_zone;
 	bool needRecallibrate;
+	int mode;
+	float 
 };
 
 #if 0
