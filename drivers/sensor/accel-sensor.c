@@ -71,11 +71,18 @@ static void adc_vbus_work_handler(struct k_work *work)
     float theta = angle_between_vectors(data->ref_acc, current_acc);
     // printk("Загальний кут нахилу: %.3f градусів\n", theta * (180.0f / M_PI));
 
+	// LOG_DBG(
+	// 	"Current values: X:%.4f Y:%.4f Z:%.4f"
+	// 	" Tilt angle: %.4f"
+	// 	, (double)ax, (double)ay, (double)az
+	// 	, (double)theta
+	// );
+
 	LOG_DBG(
-		"Current values: X:%.4f Y:%.4f Z:%.4f"
-		" Tilt angle: %.4f"
-		, (double)ax, (double)ay, (double)az
-		, (double)theta
+		"Current values: X:%d Y:%d Z:%d"
+		" Tilt angle: %d"
+		, (int)(ax*100), (int)(ay*100), (int)(az*100)
+		, (int)(theta*180)
 	);
 
 	// TODO: Add callback
@@ -145,29 +152,20 @@ static int init(const struct device *dev)
 	return rc;
 }
 
-
+#if 0
 static int _attr_get(const struct device *dev, enum sensor_channel chan,
 	enum sensor_attribute attr, struct sensor_value *val)
 {
-	struct scd30_data *data = dev->data;
-
+	// struct scd30_data *data = dev->data;
 	return -ENOTSUP;
 }
 
 static int _attr_set(const struct device *dev, enum sensor_channel chan,
 	enum sensor_attribute attr, const struct sensor_value *val)
 {
-	struct accel_sensor_data *data = dev->data;
-
-	if (chan == SENSOR_CHAN_ACCEL_XYZ && attr == SENSOR_ATTR_SAMPLING_FREQUENCY) {
-        data->sampling_period_ms = val->val1;
-		LOG_INF("Setting sempling time: %dms", val->val1);
-        return 0;
-    }
-
 	return -ENOTSUP;
 }
-
+#endif
 
 static const struct accel_sensor_driver_api driver_api = {
 	.set_current_position_as_reference = _save_current_positoin_as_reference,
