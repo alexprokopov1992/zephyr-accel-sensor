@@ -66,7 +66,10 @@ static void adc_vbus_work_handler(struct k_work *work)
     float az = sensor_value_to_double(&val[2]);
     _Vector3 current_acc = {ax, ay, az};
     data->last_acc = current_acc;
-
+	if (data->needRecallibrate) {
+		data->needRecallibrate = false;
+		data->ref_acc = data->last_acc;
+	}
     // Обчислення загального кута нахилу
     float theta = angle_between_vectors(data->ref_acc, current_acc);
     // printk("Загальний кут нахилу: %.3f градусів\n", theta * (180.0f / M_PI));
@@ -82,7 +85,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 		"Current values: X:%d Y:%d Z:%d"
 		" Tilt angle: %d"
 		, (int)(ax*100), (int)(ay*100), (int)(az*100)
-		, (int)(theta*180)
+		, (int)(theta/M_PIf*180)
 	);
 
 	// TODO: Add callback
@@ -116,7 +119,6 @@ static int init(const struct device *dev)
 {
 	const struct accel_sensor_config *cfg = dev->config;
 	struct accel_sensor_data *data = dev->data;
-
 	LOG_DBG("Initializing Accelerometer Sensor (%s)", dev->name);
 
 	const struct device *adev = cfg->accel_dev;
@@ -144,7 +146,7 @@ static int init(const struct device *dev)
     #endif
     
 	LOG_DBG("Starting periodic measurements (%d ms)", data->sampling_period_ms);
-
+	data->needRecallibrate = true;
 	// TODO: Напевно треба перенести в макрос визначення змінної
 	k_work_init_delayable(&data->dwork, adc_vbus_work_handler);
 	k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
