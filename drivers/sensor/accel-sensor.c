@@ -194,10 +194,6 @@ static int init(const struct device *dev)
 	const struct accel_sensor_config *cfg = dev->config;
 	struct accel_sensor_data *data = dev->data;
 	LOG_DBG("Initializing Accelerometer Sensor (%s)", dev->name);
-
-	init_warn_zones(dev);
-	set_warn_zone(dev, 0);
-	change_main_zone(dev,0);
 	const struct device *adev = cfg->accel_dev;
 	if (!device_is_ready(adev)) {
 		LOG_ERR("Accelerometer device %s not ready", adev->name);
@@ -205,6 +201,14 @@ static int init(const struct device *dev)
 	}
 	
 	LOG_DBG("Accelerometer device: %s is ready", adev->name);
+
+	sensor_attr_set(adev, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_FULL_SCALE, &(struct sensor_value){ .val1 = 2, .val2 = 0 });
+    sensor_attr_set(adev, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 50, .val2 = 0 });
+
+	init_warn_zones(dev);
+	set_warn_zone(dev, 0);
+	change_main_zone(dev,0);
+	
 	// struct accel_sensor_data *data = dev->data;
 	int rc;
 
