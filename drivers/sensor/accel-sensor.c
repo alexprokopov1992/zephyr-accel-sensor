@@ -81,10 +81,10 @@ static void adc_vbus_work_handler(struct k_work *work)
     float az = sensor_value_to_double(&val[2]);
     _Vector3 current_acc = {ax, ay, az};
     data->last_acc = current_acc;
-	if (data->needRecallibrate && data->mode == ACCEL_SENSOR_MODE_ARMED) {
+	if (data->need_recallibrate && data->mode == ACCEL_SENSOR_MODE_ARMED) {
 		if (!data->in_warn_alert && !data->in_main_alert)
 		{
-			data->needRecallibrate = false;
+			data->need_recallibrate = false;
 		    data->ref_acc = data->last_acc;
 		}
 	}
@@ -230,7 +230,7 @@ static int init(const struct device *dev)
     #endif
     
 	LOG_DBG("Starting periodic measurements (%d ms)", data->sampling_period_ms);
-	data->needRecallibrate = true;
+	data->need_recallibrate = true;
 	data->in_warn_alert = false;
 	data->in_main_alert = false;
 	data->mode = ACCEL_SENSOR_MODE_DISARMED;
@@ -248,20 +248,62 @@ static int _attr_get(const struct device *dev, enum sensor_channel chan,
 	// struct scd30_data *data = dev->data;
 	return -ENOTSUP;
 }
+#endif
 
 static int _attr_set(const struct device *dev, enum sensor_channel chan,
 	enum sensor_attribute attr, const struct sensor_value *val)
 {
+	struct accel_sensor_data *data = dev->data;
+	
+	if (chan == (enum sensor_channel)ACCEL_SENSOR_MODE && attr == (enum sensor_attribute)ACCEL_SENSOR_SPECIAL_ATTRS) {
+		if (val->val1 == data->mode) return 0;
+
+        switch(val->val1){
+			case (ACCEL_SENSOR_MODE_ARMED):
+				//зупинка таймера алярма
+				data->need_recallibrate = true;
+				data->in_warn_alert = false;
+				data->in_main_alert = false;
+				data->mode = ACCEL_SENSOR_MODE_ARMED;
+				break;
+			case (ACCEL_SENSOR_MODE_DISARMED):
+			    //зупинка таймера алярма
+			    data->mode = val->val1;
+				break;
+			case (ACCEL_SENSOR_MODE_TURN_OFF):
+				//зупинка таймера алярма
+				data->mode = val->val1;
+				break;
+			case (ACCEL_SENSOR_MODE_ALARM):
+				if (data->mode == ACCEL_SENSOR_MODE_ARMED) {
+					//тут запуск таймера має бути алярма
+					data->mode = ACCEL_SENSOR_MODE_ALARM;
+				}
+				break;
+			case (ACCEL_SENSOR_MODE_ALARM_STOP):
+				if (data->mode == ACCEL_SENSOR_MODE_ALARM)
+				{
+					//зупинка таймера алярма
+					data->mode = ACCEL_SENSOR_MODE_ARMED;
+				}
+				break;
+			default:
+				break;
+		}
+        return 0;
+    }
+
+
 	return -ENOTSUP;
 }
-#endif
+
 
 static const struct accel_sensor_driver_api driver_api = {
 	.set_current_position_as_reference = _save_current_positoin_as_reference,
 	// .sample_fetch = scd30_sample_fetch,
 	// .channel_get = scd30_channel_get,
 	// .attr_get = _attr_get,
-	// .attr_set = _attr_set,
+	.attr_set = _attr_set,
 };
 
 #define ACCEL_SENSOR_DEFINE(inst)									    \

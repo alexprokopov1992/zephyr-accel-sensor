@@ -11,6 +11,17 @@ enum accel_sensor_mode {
     ACCEL_SENSOR_MODE_ALARM_STOP,
 };
 
+enum accel_sensor_attrs {
+    ACCEL_SENSOR_SPECIAL_ATTRS=64,
+};
+
+enum accel_sensor_channel {
+    ACCEL_SENSOR_MODE=128,
+    ACCEL_SENSOR_CHANNEL_WARN_ZONE,
+    ACCEL_SENSOR_CHANNEL_MAIN_ZONE,
+    ACCEL_SENSOR_INCREASE_SENSIVITY_INTERVAL_SEC,
+};
+
 struct accel_sensor_config {
 	// const struct i2c_dt_spec bus;
 	const struct device *accel_dev;
@@ -33,13 +44,13 @@ struct accel_sensor_data {
 	int current_warn_zone;
 	int selected_main_zone;
 	int current_main_zone;
-	bool needRecallibrate;
+	bool need_recallibrate;
 	int mode;
 	bool in_warn_alert;
 	bool in_main_alert;
 };
 
-#if 0
+
 /**
  * @typedef sensor_attr_set_t
  * @brief Callback API upon setting a sensor's attributes
@@ -51,6 +62,7 @@ typedef int (*sensor_attr_set_t)(const struct device *dev,
 	enum sensor_attribute attr,
 	const struct sensor_value *val);
 
+#if 0
 /**
  * @typedef sensor_attr_get_t
  * @brief Callback API upon getting a sensor's attributes
@@ -68,7 +80,7 @@ typedef int (*set_current_position_as_reference_t)(const struct device *dev);
 
 __subsystem struct accel_sensor_driver_api {
 	set_current_position_as_reference_t set_current_position_as_reference;
-	// sensor_attr_set_t attr_set;
+	sensor_attr_set_t attr_set;
 	// sensor_attr_get_t attr_get;
 	// sensor_trigger_set_t trigger_set;
 	// sensor_sample_fetch_t sample_fetch;
