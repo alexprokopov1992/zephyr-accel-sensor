@@ -81,9 +81,12 @@ static void adc_vbus_work_handler(struct k_work *work)
     float az = sensor_value_to_double(&val[2]);
     _Vector3 current_acc = {ax, ay, az};
     data->last_acc = current_acc;
-	if (data->needRecallibrate) {
-		data->needRecallibrate = false;
-		data->ref_acc = data->last_acc;
+	if (data->needRecallibrate && data->mode == ACCEL_SENSOR_MODE_ARMED) {
+		if (!data->in_warn_alert && !data->in_main_alert)
+		{
+			data->needRecallibrate = false;
+		    data->ref_acc = data->last_acc;
+		}
 	}
     // Обчислення загального кута нахилу
     float theta = angle_between_vectors(data->ref_acc, current_acc);
@@ -228,6 +231,9 @@ static int init(const struct device *dev)
     
 	LOG_DBG("Starting periodic measurements (%d ms)", data->sampling_period_ms);
 	data->needRecallibrate = true;
+	data->in_warn_alert = false;
+	data->in_main_alert = false;
+	data->mode = ACCEL_SENSOR_MODE_DISARMED;
 	// TODO: Напевно треба перенести в макрос визначення змінної
 	k_work_init_delayable(&data->dwork, adc_vbus_work_handler);
 	k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));

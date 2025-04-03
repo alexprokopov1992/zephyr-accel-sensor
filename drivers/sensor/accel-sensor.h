@@ -3,6 +3,14 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 
+enum accel_sensor_mode {
+    ACCEL_SENSOR_MODE_ARMED=0,
+    ACCEL_SENSOR_MODE_DISARMED,
+    ACCEL_SENSOR_MODE_TURN_OFF,
+    ACCEL_SENSOR_MODE_ALARM,
+    ACCEL_SENSOR_MODE_ALARM_STOP,
+};
+
 struct accel_sensor_config {
 	// const struct i2c_dt_spec bus;
 	const struct device *accel_dev;
@@ -27,7 +35,8 @@ struct accel_sensor_data {
 	int current_main_zone;
 	bool needRecallibrate;
 	int mode;
-	float 
+	bool in_warn_alert;
+	bool in_main_alert;
 };
 
 #if 0
