@@ -71,12 +71,48 @@ int get_mma8652_val(const struct device *dev, struct sensor_value *val)
 }
 
 
-static void coarsering(const struct device *dev, int level)
+static void coarsering(struct accel_sensor_data *data, int level)
 {
-	struct accel_sensor_data *data = dev->data;
-	if (level = 0)
+	if (level == 0)
 	{
-
+		if (data->current_warn_zone == 9){
+			data->max_warn_alert_level = true;
+			LOG_DBG("Max warn level reached %d", data->current_warn_zone);
+			return;
+		}
+		if (data->warn_zone_cos_pow2[data->current_warn_zone+1] < data->main_zone_cos_pow2[data->selected_main_zone])
+		{
+			data->max_warn_alert_level = true;
+			LOG_DBG("Max warn level reached %d", data->current_warn_zone);
+		} else {
+			data->current_warn_zone++;
+			LOG_DBG("Coarsering WARN_ZONE to %d", data->current_warn_zone);
+		}
+	} else {
+		if (data->current_main_zone == 9){
+			data->max_warn_alert_level = true;
+			data->max_main_alert_level = true;
+			while (data->warn_zone_cos_pow2[data->current_warn_zone] > data->main_zone_cos_pow2[data->selected_main_zone])
+			{
+				if (data->current_warn_zone == 9) break;
+				data->current_warn_zone++;
+			}
+			if (data->warn_zone_cos_pow2[data->current_warn_zone] <= data->main_zone_cos_pow2[data->selected_main_zone] && data->current_warn_zone > 0) data->current_warn_zone--;
+			LOG_DBG("Coarsering WARN_ZONE to %d", data->current_warn_zone);
+			LOG_DBG("Max main level reached %d", data->current_main_zone);
+			return;
+		} else {
+			data->current_main_zone += 1;
+			data->max_warn_alert_level = true;
+			while (data->warn_zone_cos_pow2[data->current_warn_zone] > data->main_zone_cos_pow2[data->selected_main_zone])
+			{
+				if (data->current_warn_zone == 9) break;
+				data->current_warn_zone++;
+			}
+			if (data->warn_zone_cos_pow2[data->current_warn_zone] <= data->main_zone_cos_pow2[data->selected_main_zone] && data->current_warn_zone > 0) data->current_warn_zone--;
+			LOG_DBG("Max warn level reached %d", data->current_warn_zone);
+			LOG_DBG("Coarsering MAIN_ZONE to %d", data->current_main_zone);
+		}
 	}
 }
 
@@ -105,17 +141,20 @@ static void adc_vbus_work_handler(struct k_work *work)
 	}
 	if (pow_cos_theta < data->main_zone_cos_pow2[data->current_main_zone])
 	{
-		LOG_DBG("MAIN TRIGGER");
-		data->main_handler(dev, data->warn_trigger);
-		data->in_warn_alert = true;
-		data->in_main_alert = true;
-		coarsering(dev, 1);
-		
+		if (!data->max_main_alert_level){
+			data->main_handler(dev, data->main_trigger);
+			data->in_warn_alert = true;
+			data->in_main_alert = true;
+			coarsering(data, 1);
+			LOG_DBG("MAIN TRIGGER");
+		} 
 	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone]){
-		LOG_DBG("WARN TRIGGER");
-		data->warn_handler(dev, data->warn_trigger);
-		data->in_warn_alert = true;
-		coarsering(dev, 0);
+		if (!data->max_warn_alert_level) {
+			data->in_warn_alert = true;
+			data->warn_handler(dev, data->warn_trigger);
+			coarsering(data, 0);
+			LOG_DBG("WARN TRIGGER");
+		}
 	}
 
 	LOG_DBG(
