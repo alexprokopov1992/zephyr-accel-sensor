@@ -149,16 +149,17 @@ static void adc_vbus_work_handler(struct k_work *work)
 			data->in_main_alert = true;
 			coarsering(data, 1);
 			LOG_DBG("MAIN TRIGGER");
+			k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 		}
-		k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+		
 	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone]){
 		if (!data->max_warn_alert_level) {
 			data->in_warn_alert = true;
 			data->warn_handler(dev, data->warn_trigger);
 			coarsering(data, 0);
 			LOG_DBG("WARN TRIGGER");
-		}
-		k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+			k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+		}	
 	}
 
 	LOG_DBG(
@@ -285,6 +286,7 @@ static void increase_sensivity_timer_handler(struct k_timer *timer)
 	struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, increase_sensivity_timer);
 	int prev_warn_zone = data->current_warn_zone;
 	int prev_main_zone = data->current_main_zone;
+	LOG_DBG("Trying increase sensivity");
 	if (data->mode == ACCEL_SENSOR_MODE_ARMED)
 	{
 		float pow_cos_theta = cospow2_between_vectors(data->ref_acc, data->last_acc);
