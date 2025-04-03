@@ -15,9 +15,12 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 #define M_PIf 3.1415927f
 #endif
 
+#define REFRESH_POS_TIME 3600
+
 static float warn_zone_start_angle = 1.0;
 static float warn_zone_step_angle = 2.0/9.0;
 static float max_angle = 10.00;
+static const float cos_pow_0_5  = 0.999961923;
 
 // Функція для обчислення довжини вектора
 float vector_length(_Vector3 v) {
@@ -81,22 +84,29 @@ static void adc_vbus_work_handler(struct k_work *work)
     float az = sensor_value_to_double(&val[2]);
     _Vector3 current_acc = {ax, ay, az};
     data->last_acc = current_acc;
-	if (data->need_recallibrate && data->mode == ACCEL_SENSOR_MODE_ARMED) {
-		if (!data->in_warn_alert && !data->in_main_alert)
-		{
-			data->need_recallibrate = false;
-		    data->ref_acc = data->last_acc;
-		}
-	}
     // Обчислення загального кута нахилу
-    float theta = angle_between_vectors(data->ref_acc, current_acc);
+    // float theta = angle_between_vectors(data->ref_acc, current_acc);
     // printk("Загальний кут нахилу: %.3f градусів\n", theta * (180.0f / M_PI));
+
+	float pow_cos_theta = cospow2_between_vectors(data->ref_acc, current_acc);
+	if (pow_cos_theta == 0) {
+		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
+		return;
+	}
+	if (pow_cos_theta < data->main_zone_cos_pow2[data->current_main_zone])
+	{
+		LOG_DBG("MAIN TRIGGER");
+		//main_trigger
+	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone]){
+		LOG_DBG("WARN TRIGGER");
+		//warn_trigger
+	}
 
 	LOG_DBG(
 		"Current values: X:%.4f Y:%.4f Z:%.4f"
-		" Tilt angle: %.4f"
+		" pow cos theta: %.8f"
 		, (double)ax, (double)ay, (double)az
-		, (double)(theta/M_PIf*180)
+		, (double)(pow_cos_theta)
 	);
 
 	// TODO: Add callback
@@ -113,6 +123,9 @@ static void adc_vbus_work_handler(struct k_work *work)
     //     // val[0].val1, val[1].val1, val[2].val1
     // );
     // adc_vbus_process();
+
+
+
     k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
 }
 
@@ -188,6 +201,25 @@ static int _save_current_positoin_as_reference(const struct device *dev)
 	return 0;
 }
 
+static void refresh_current_pos_timer_handler(struct k_timer *timer)
+{
+	LOG_DBG("Refreshing ref_acc");
+    struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, refresh_current_pos_timer);
+	if (data->mode == ACCEL_SENSOR_MODE_ARMED)
+	{
+		if (!data->in_warn_alert && !data->in_main_alert)
+		{
+			float pow_cos_theta = cospow2_between_vectors(data->ref_acc, data->last_acc);
+			if (pow_cos_theta >  cos_pow_0_5 || pow_cos_theta == 0)
+			{
+				data->ref_acc = data->last_acc;
+				LOG_DBG("ref_acc Refreshed");
+			}  
+			LOG_DBG("cosinuses: %.8f %.8f", pow_cos_theta, cos_pow_0_5); 
+		}
+	}
+	k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+}
 
 static int init(const struct device *dev)
 {
@@ -201,8 +233,10 @@ static int init(const struct device *dev)
 	}
 	
 	LOG_DBG("Accelerometer device: %s is ready", adev->name);
-	sensor_attr_set(adev, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_FULL_SCALE, &(struct sensor_value){ .val1 = 2, .val2 = 0 });
-    sensor_attr_set(adev, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 50, .val2 = 0 });
+
+	const struct device *mma = data->accel_dev;
+	sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_FULL_SCALE, &(struct sensor_value){ .val1 = 2, .val2 = 0 });
+    sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 50, .val2 = 0 });
 
 	init_warn_zones(dev);
 	set_warn_zone(dev, 0);
@@ -226,10 +260,10 @@ static int init(const struct device *dev)
     #endif
     
 	LOG_DBG("Starting periodic measurements (%d ms)", data->sampling_period_ms);
-	data->need_recallibrate = true;
 	data->in_warn_alert = false;
 	data->in_main_alert = false;
 	data->mode = ACCEL_SENSOR_MODE_DISARMED;
+	k_timer_init(&data->refresh_current_pos_timer, refresh_current_pos_timer_handler, NULL);
 	// TODO: Напевно треба перенести в макрос визначення змінної
 	k_work_init_delayable(&data->dwork, adc_vbus_work_handler);
 	k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
@@ -260,18 +294,22 @@ static int _attr_set(const struct device *dev,
         switch(val1){
 			case (ACCEL_SENSOR_MODE_ARMED):
 				//зупинка таймера алярма
-				data->need_recallibrate = true;
+				data->current_main_zone = data->selected_main_zone;
+				data->current_warn_zone = data->selected_warn_zone;
 				data->in_warn_alert = false;
 				data->in_main_alert = false;
 				data->mode = ACCEL_SENSOR_MODE_ARMED;
+				k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
 				break;
 			case (ACCEL_SENSOR_MODE_DISARMED):
 			    //зупинка таймера алярма
 			    data->mode = val1;
+				k_timer_stop(&data->refresh_current_pos_timer);
 				break;
 			case (ACCEL_SENSOR_MODE_TURN_OFF):
 				//зупинка таймера алярма
 				data->mode = val1;
+				k_timer_stop(&data->refresh_current_pos_timer);
 				break;
 			case (ACCEL_SENSOR_MODE_ALARM):
 				if (data->mode == ACCEL_SENSOR_MODE_ARMED) {

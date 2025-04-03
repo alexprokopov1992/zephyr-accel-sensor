@@ -35,6 +35,10 @@ struct accel_sensor_data {
 	uint16_t sampling_period_ms;
 	struct k_work_delayable dwork;
 	const struct device *accel_dev;
+	sensor_trigger_handler_t warn_handler;
+    const struct sensor_trigger *warn_trigger;
+    sensor_trigger_handler_t main_handler;
+    const struct sensor_trigger *main_trigger;
 	_Vector3 ref_acc;		// Еталонне положення пристрою
 	_Vector3 last_acc;		// Останнє виміряне прискорення
 	float main_zone_steps[10];
@@ -44,10 +48,10 @@ struct accel_sensor_data {
 	int current_warn_zone;
 	int selected_main_zone;
 	int current_main_zone;
-	bool need_recallibrate;
 	int mode;
 	bool in_warn_alert;
 	bool in_main_alert;
+	struct k_timer refresh_current_pos_timer;
 };
 
 
