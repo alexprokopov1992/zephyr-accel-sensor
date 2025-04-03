@@ -17,6 +17,7 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 
 static float warn_zone_start_angle = 1.0;
 static float warn_zone_step_angle = 2.0/9.0;
+static float max_angle = 10.00;
 
 // Функція для обчислення довжини вектора
 float vector_length(_Vector3 v) {
@@ -116,8 +117,10 @@ static void init_warn_zones(const struct device *dev)
 		data->warn_zone_cos_pow2[i] = data->warn_zone_cos_pow2[i-1] + warn_zone_step_angle;
 	}
 
+	// LOG_DBG("Warning zone angles (degrees):");
 	for (int i = 0; i < 10; i++)
 	{
+		// LOG_DBG("Angle[%d]: %d°", i, (int)(data->warn_zone_cos_pow2[i]*100));
 		float angle_rad = data->warn_zone_cos_pow2[i] * (M_PIf / 180.0f);
 		data->warn_zone_cos_pow2[i] = cosf(angle_rad) * cosf(angle_rad);
 	}
@@ -128,10 +131,20 @@ static void init_warn_zones(const struct device *dev)
 static void create_main_zones(const struct device *dev, int warn_zone)
 {
 	struct accel_sensor_data *data = dev->data;
+	data->main_zone_cos_pow2[0] = warn_zone_start_angle + (float)(warn_zone + 1) * warn_zone_step_angle;
+	float step = (max_angle - data->main_zone_cos_pow2[0]) / 9.0;
+	for (int i = 1; i < 10; i++)
+	{
+		data->main_zone_cos_pow2[i] = data->main_zone_cos_pow2[i-1] + step;
+	}
 
-	
-
-
+	// LOG_DBG("Main zone angles (degrees):");
+	for (int i = 0; i < 10; i++)
+	{
+		// LOG_DBG("Angle[%d]: %d°", i, (int)(data->main_zone_cos_pow2[i]*100));
+		float angle_rad = data->main_zone_cos_pow2[i] * (M_PIf / 180.0f);
+		data->main_zone_cos_pow2[i] = cosf(angle_rad) * cosf(angle_rad);
+	}
 	return 0;
 }
 
@@ -143,7 +156,13 @@ static void set_warn_zone(const struct device *dev, int zone)
 	create_main_zones(dev, zone);
 	data->current_main_zone = 0;
 	data->selected_main_zone = 0;
+}
 
+static void set_main_zone(const struct device *dev, int zone)
+{
+	struct accel_sensor_data *data = dev->data;
+	data->current_main_zone = zone;
+	data->selected_main_zone = zone;
 }
 
 // API
@@ -161,6 +180,9 @@ static int init(const struct device *dev)
 	struct accel_sensor_data *data = dev->data;
 	LOG_DBG("Initializing Accelerometer Sensor (%s)", dev->name);
 
+	init_warn_zones(dev);
+	set_warn_zone(dev, 0);
+	set_main_zone(dev,0);
 	const struct device *adev = cfg->accel_dev;
 	if (!device_is_ready(adev)) {
 		LOG_ERR("Accelerometer device %s not ready", adev->name);
