@@ -77,10 +77,11 @@ typedef int (*sensor_attr_get_t)(const struct device *dev,
 #endif
 
 typedef int (*set_current_position_as_reference_t)(const struct device *dev);
+typedef int (*set_sensor_settings_t)(const struct device *dev, int channel, int val1, int val2);
 
 __subsystem struct accel_sensor_driver_api {
 	set_current_position_as_reference_t set_current_position_as_reference;
-	sensor_attr_set_t attr_set;
+	set_sensor_settings_t attr_set;
 	// sensor_attr_get_t attr_get;
 	// sensor_trigger_set_t trigger_set;
 	// sensor_sample_fetch_t sample_fetch;
@@ -88,6 +89,18 @@ __subsystem struct accel_sensor_driver_api {
 	// sensor_get_decoder_t get_decoder;
 	// sensor_submit_t submit;
 };
+
+static inline int accel_sensor_attr_set(const struct device *dev, int channel, int val1, int val2)
+{
+	const struct accel_sensor_driver_api *api = (const struct accel_sensor_driver_api *)dev->api;
+
+	if (api->attr_set == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->attr_set(dev, channel, val1, val2);
+}
+
 
 static inline int accel_sensor_set_current_position_as_reference(const struct device *dev)
 {

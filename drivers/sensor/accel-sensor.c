@@ -201,9 +201,9 @@ static int init(const struct device *dev)
 	}
 	
 	LOG_DBG("Accelerometer device: %s is ready", adev->name);
-	
 	sensor_attr_set(adev, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_FULL_SCALE, &(struct sensor_value){ .val1 = 2, .val2 = 0 });
     sensor_attr_set(adev, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 50, .val2 = 0 });
+
 	init_warn_zones(dev);
 	set_warn_zone(dev, 0);
 	change_main_zone(dev,0);
@@ -247,17 +247,17 @@ static int _attr_get(const struct device *dev, enum sensor_channel chan,
 #endif
 
 static int _attr_set(const struct device *dev,
-    enum sensor_channel chan,
-    enum sensor_attribute attr,
-    const struct sensor_value *val)
+    int chan,
+    int val1,
+    int val2)
 {
-	printk("attr_set called: chan=%d, attr=%d, val1=%d\n", chan, attr, val->val1);
+	printk("attr_set called: chan=%d, val1=%d, val2=%d\n", chan, val1, val2);
 	struct accel_sensor_data *data = dev->data;
 
-	if (chan == (enum sensor_channel)ACCEL_SENSOR_MODE && attr == (enum sensor_attribute)ACCEL_SENSOR_SPECIAL_ATTRS) {
-		if (val->val1 == data->mode) return 0;
+	if (chan == (enum sensor_channel)ACCEL_SENSOR_MODE) {
+		if (val1 == data->mode) return 0;
 
-        switch(val->val1){
+        switch(val1){
 			case (ACCEL_SENSOR_MODE_ARMED):
 				//зупинка таймера алярма
 				data->need_recallibrate = true;
@@ -267,11 +267,11 @@ static int _attr_set(const struct device *dev,
 				break;
 			case (ACCEL_SENSOR_MODE_DISARMED):
 			    //зупинка таймера алярма
-			    data->mode = val->val1;
+			    data->mode = val1;
 				break;
 			case (ACCEL_SENSOR_MODE_TURN_OFF):
 				//зупинка таймера алярма
-				data->mode = val->val1;
+				data->mode = val1;
 				break;
 			case (ACCEL_SENSOR_MODE_ALARM):
 				if (data->mode == ACCEL_SENSOR_MODE_ARMED) {
