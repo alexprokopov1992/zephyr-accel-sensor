@@ -16,7 +16,7 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 #endif
 
 #define REFRESH_POS_TIME 3600
-#define INCREASE_SENSIVITY_TIME 1800
+#define INCREASE_SENSIVITY_TIME 10
 
 static float warn_zone_start_angle = 1.0;
 static float warn_zone_step_angle = 2.0/9.0;
@@ -78,9 +78,7 @@ static void coarsering(struct accel_sensor_data *data, int level)
 		if (data->current_warn_zone == 9){
 			data->max_warn_alert_level = true;
 			LOG_DBG("Max warn level reached %d", data->current_warn_zone);
-			return;
-		}
-		if (data->warn_zone_cos_pow2[data->current_warn_zone+1] < data->main_zone_cos_pow2[data->selected_main_zone])
+		} else if (data->warn_zone_cos_pow2[data->current_warn_zone+1] < data->main_zone_cos_pow2[data->selected_main_zone])
 		{
 			data->max_warn_alert_level = true;
 			LOG_DBG("Max warn level reached %d", data->current_warn_zone);
@@ -100,7 +98,6 @@ static void coarsering(struct accel_sensor_data *data, int level)
 			if (data->warn_zone_cos_pow2[data->current_warn_zone] <= data->main_zone_cos_pow2[data->selected_main_zone] && data->current_warn_zone > 0) data->current_warn_zone--;
 			LOG_DBG("Coarsering WARN_ZONE to %d", data->current_warn_zone);
 			LOG_DBG("Max main level reached %d", data->current_main_zone);
-			return;
 		} else {
 			data->current_main_zone += 1;
 			data->max_warn_alert_level = true;
@@ -134,6 +131,11 @@ static void adc_vbus_work_handler(struct k_work *work)
     // float theta = angle_between_vectors(data->ref_acc, current_acc);
     // printk("Загальний кут нахилу: %.3f градусів\n", theta * (180.0f / M_PI));
 
+	if (data->mode != ACCEL_SENSOR_MODE_ARMED) {
+		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
+		return;
+	}
+
 	float pow_cos_theta = cospow2_between_vectors(data->ref_acc, current_acc);
 	if (pow_cos_theta == 0) {
 		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
@@ -147,7 +149,8 @@ static void adc_vbus_work_handler(struct k_work *work)
 			data->in_main_alert = true;
 			coarsering(data, 1);
 			LOG_DBG("MAIN TRIGGER");
-		} 
+		}
+		k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone]){
 		if (!data->max_warn_alert_level) {
 			data->in_warn_alert = true;
@@ -155,6 +158,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 			coarsering(data, 0);
 			LOG_DBG("WARN TRIGGER");
 		}
+		k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 	}
 
 	LOG_DBG(
@@ -278,8 +282,60 @@ static void refresh_current_pos_timer_handler(struct k_timer *timer)
 
 static void increase_sensivity_timer_handler(struct k_timer *timer)
 {
-	struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, refresh_current_pos_timer);
-	k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+	struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, increase_sensivity_timer);
+	int prev_warn_zone = data->current_warn_zone;
+	int prev_main_zone = data->current_main_zone;
+	if (data->mode == ACCEL_SENSOR_MODE_ARMED)
+	{
+		float pow_cos_theta = cospow2_between_vectors(data->ref_acc, data->last_acc);
+		while (data->current_main_zone > data->selected_main_zone)
+		{
+			if (data->main_zone_cos_pow2[data->current_main_zone] < pow_cos_theta) {
+				data->current_main_zone--;
+			} else {
+				data->current_main_zone++;
+				break;
+			}
+		}
+		if (data->current_main_zone == data->selected_main_zone)
+		{
+			while (data->current_warn_zone > data->selected_warn_zone)
+			{
+				if (data->warn_zone_cos_pow2[data->current_warn_zone] < pow_cos_theta) {
+					data->current_warn_zone--;
+				} else {
+					data->current_warn_zone++;
+					break;
+				}
+			}
+		}
+		
+	} else {
+		k_timer_start(&data->increase_sensivity_timer, K_SECONDS(30), K_NO_WAIT);
+		return;
+	}
+
+	if (data->current_main_zone != prev_main_zone){
+		LOG_DBG("Main zone changed from %d to %d", prev_main_zone, data->current_main_zone);
+		data->max_main_alert_level = false;
+	}
+
+	if (data->current_warn_zone != prev_warn_zone){
+		LOG_DBG("Warn zone changed from %d to %d", prev_warn_zone, data->current_warn_zone);
+		data->max_warn_alert_level = false;
+	} 
+
+	if (data->current_warn_zone == data->selected_warn_zone) {
+		data->in_warn_alert = false;
+	}
+
+	if (data->current_main_zone == data->selected_main_zone) {
+		data->in_main_alert = false;
+	}
+
+	if (data->in_warn_alert || data->in_main_alert) {
+		k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+	}
 }
 
 static int init(const struct device *dev)
