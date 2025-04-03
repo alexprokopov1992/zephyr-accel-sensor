@@ -253,7 +253,9 @@ static int _attr_get(const struct device *dev, enum sensor_channel chan,
 static int _attr_set(const struct device *dev, enum sensor_channel chan,
 	enum sensor_attribute attr, const struct sensor_value *val)
 {
+	printk("attr_set called: chan=%d, attr=%d, val1=%d\n", chan, attr, val->val1);
 	struct accel_sensor_data *data = dev->data;
+
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_MODE && attr == (enum sensor_attribute)ACCEL_SENSOR_SPECIAL_ATTRS) {
 		if (val->val1 == data->mode) return 0;
 
