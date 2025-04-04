@@ -16,7 +16,7 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 #endif
 
 #define REFRESH_POS_TIME 3600
-#define INCREASE_SENSIVITY_TIME 10
+#define INCREASE_SENSIVITY_TIME 1800
 
 static float warn_zone_start_angle = 1.0;
 static float warn_zone_step_angle = 2.0/9.0;
@@ -244,6 +244,7 @@ static void change_main_zone(const struct device *dev, int zone)
 	struct accel_sensor_data *data = dev->data;
 	data->current_main_zone = zone;
 	data->selected_main_zone = zone;
+	data->current_warn_zone = data->selected_warn_zone;
 }
 
 static void change_warn_zone(const struct device *dev, int zone)
@@ -439,6 +440,7 @@ static int _attr_set(const struct device *dev,
         switch(val1){
 			case (ACCEL_SENSOR_MODE_ARMED):
 				//зупинка таймера алярма
+				LOG_DBG("ACCEL_SENSOR_MODE_ARMED");
 				data->current_main_zone = data->selected_main_zone;
 				data->current_warn_zone = data->selected_warn_zone;
 				data->in_warn_alert = false;
@@ -451,12 +453,14 @@ static int _attr_set(const struct device *dev,
 				break;
 			case (ACCEL_SENSOR_MODE_DISARMED):
 			    //зупинка таймера алярма
+				LOG_DBG("ACCEL_SENSOR_MODE_DISARMED");
 			    data->mode = val1;
 				k_timer_stop(&data->refresh_current_pos_timer);
 				k_timer_stop(&data->increase_sensivity_timer);
 				break;
 			case (ACCEL_SENSOR_MODE_TURN_OFF):
 				//зупинка таймера алярма
+				LOG_DBG("ACCEL_SENSOR_MODE_TURN_OFF");
 				data->mode = val1;
 				k_timer_stop(&data->refresh_current_pos_timer);
 				k_timer_stop(&data->increase_sensivity_timer);
@@ -464,6 +468,7 @@ static int _attr_set(const struct device *dev,
 			case (ACCEL_SENSOR_MODE_ALARM):
 				if (data->mode == ACCEL_SENSOR_MODE_ARMED) {
 					//тут запуск таймера має бути алярма
+					LOG_DBG("ACCEL_SENSOR_MODE_ALARM");
 					data->mode = ACCEL_SENSOR_MODE_ALARM;
 				}
 				break;
@@ -471,6 +476,7 @@ static int _attr_set(const struct device *dev,
 				if (data->mode == ACCEL_SENSOR_MODE_ALARM)
 				{
 					//зупинка таймера алярма
+					LOG_DBG("ACCEL_SENSOR_MODE_ALARM_STOP");
 					data->mode = ACCEL_SENSOR_MODE_ARMED;
 				}
 				break;
@@ -480,6 +486,28 @@ static int _attr_set(const struct device *dev,
         return 0;
     }
 
+	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_WARN_ZONE) {
+		LOG_DBG("Set warn zone to %d", val1);
+		set_warn_zone(dev, 10 - val1);
+		data->in_warn_alert = false;
+		data->in_main_alert = false;
+		data->max_warn_alert_level = false;
+		data->max_main_alert_level = false;
+		k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
+		k_timer_stop(&data->increase_sensivity_timer);
+	}
+
+	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_MAIN_ZONE) {
+		LOG_DBG("Set main zone to %d", val1);
+		change_main_zone(dev, 10 - val1);
+		data->in_warn_alert = false;
+		data->in_main_alert = false;
+		data->max_warn_alert_level = false;
+		data->max_main_alert_level = false;
+		k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
+		k_timer_stop(&data->increase_sensivity_timer);
+
+	}
 
 	return -ENOTSUP;
 }
