@@ -16,7 +16,7 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 #endif
 
 #define REFRESH_POS_TIME 3600
-#define INCREASE_SENSIVITY_TIME 1800
+#define INCREASE_SENSIVITY_TIME 10
 
 static float warn_zone_start_angle = 1.0;
 static float warn_zone_step_angle = 2.0/9.0;
