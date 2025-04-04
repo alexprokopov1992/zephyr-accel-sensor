@@ -487,7 +487,7 @@ static int _attr_set(const struct device *dev,
     }
 
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_WARN_ZONE) {
-		LOG_DBG("Set warn zone to %d", val1);
+		LOG_DBG("Set warn zone to %d", 10 - val1);
 		set_warn_zone(dev, 10 - val1);
 		data->in_warn_alert = false;
 		data->in_main_alert = false;
@@ -498,7 +498,7 @@ static int _attr_set(const struct device *dev,
 	}
 
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_MAIN_ZONE) {
-		LOG_DBG("Set main zone to %d", val1);
+		LOG_DBG("Set main zone to %d", 10 - val1);
 		change_main_zone(dev, 10 - val1);
 		data->in_warn_alert = false;
 		data->in_main_alert = false;
