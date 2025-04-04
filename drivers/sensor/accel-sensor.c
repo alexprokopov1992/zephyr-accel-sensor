@@ -464,7 +464,11 @@ static int _attr_set(const struct device *dev,
 				data->max_warn_alert_level = false;
 				data->max_main_alert_level = false;
 				data->mode = ACCEL_SENSOR_MODE_ARMED;
-				k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
+				data->ref_acc.x = 0;
+				data->ref_acc.y = 0;
+				data->ref_acc.z = 0;
+				k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+				// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
 				k_timer_stop(&data->increase_sensivity_timer);
 				k_timer_stop(&data->alarm_timer);
 				break;
@@ -511,6 +515,10 @@ static int _attr_set(const struct device *dev,
 			create_main_zones(dev, data->current_warn_zone);
 			data->current_main_zone = data->selected_main_zone;
 			LOG_DBG("set warn zone to %d, set main zone to %d", data->current_warn_zone, data->current_main_zone);
+			data->ref_acc.x = 0;
+			data->ref_acc.y = 0;
+			data->ref_acc.z = 0;
+			k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 			LOG_DBG("WARN_ZONE disabled");
 			return 0;
 		}
@@ -522,7 +530,11 @@ static int _attr_set(const struct device *dev,
 		data->max_warn_alert_level = false;
 		data->max_main_alert_level = false;
 		data->warn_zone_active = true;
-		k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
+		data->ref_acc.x = 0;
+		data->ref_acc.y = 0;
+		data->ref_acc.z = 0;
+		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+		// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
 		k_timer_stop(&data->increase_sensivity_timer);
 		return 0;
 	}
@@ -531,6 +543,10 @@ static int _attr_set(const struct device *dev,
 		if (val1 == 0){
 			data->main_zone_active = false;
 			data->current_main_zone = data->selected_main_zone;
+			data->ref_acc.x = 0;
+			data->ref_acc.y = 0;
+			data->ref_acc.z = 0;
+			k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 			LOG_DBG("MAIN_ZONE disabled");
 			return 0;
 		}
@@ -542,7 +558,11 @@ static int _attr_set(const struct device *dev,
 		data->max_warn_alert_level = false;
 		data->max_main_alert_level = false;
 		data->main_zone_active = true;
-		k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
+		data->ref_acc.x = 0;
+		data->ref_acc.y = 0;
+		data->ref_acc.z = 0;
+		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+		// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
 		k_timer_stop(&data->increase_sensivity_timer);
 		return 0;
 	}
