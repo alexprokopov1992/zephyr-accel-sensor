@@ -278,8 +278,21 @@ static void refresh_current_pos_timer_handler(struct k_timer *timer)
 			}  
 			LOG_DBG("cosinuses: %.8f %.8f", pow_cos_theta, cos_pow_0_5); 
 		}
+	} else {
+		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(5), K_NO_WAIT);
+		return;
 	}
 	k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+}
+
+static void alarm_timer_handler(struct k_timer *timer)
+{
+	LOG_DBG("Alarm timer expired");
+	struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, alarm_timer);
+	if (data->mode == ACCEL_SENSOR_MODE_ALARM) {
+		LOG_DBG("ACCEL_SENSOR_MODE_ARMED");
+		data->mode = ACCEL_SENSOR_MODE_ARMED;
+	}
 }
 
 static void increase_sensivity_timer_handler(struct k_timer *timer)
@@ -387,6 +400,7 @@ static int init(const struct device *dev)
 	data->mode = ACCEL_SENSOR_MODE_DISARMED;
 	k_timer_init(&data->refresh_current_pos_timer, refresh_current_pos_timer_handler, NULL);
 	k_timer_init(&data->increase_sensivity_timer, increase_sensivity_timer_handler, NULL);
+	k_timer_init(&data->alarm_timer, alarm_timer_handler, NULL);
 	// TODO: Напевно треба перенести в макрос визначення змінної
 	k_work_init_delayable(&data->dwork, adc_vbus_work_handler);
 	k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
@@ -439,7 +453,6 @@ static int _attr_set(const struct device *dev,
 
         switch(val1){
 			case (ACCEL_SENSOR_MODE_ARMED):
-				//зупинка таймера алярма
 				LOG_DBG("ACCEL_SENSOR_MODE_ARMED");
 				data->current_main_zone = data->selected_main_zone;
 				data->current_warn_zone = data->selected_warn_zone;
@@ -450,24 +463,25 @@ static int _attr_set(const struct device *dev,
 				data->mode = ACCEL_SENSOR_MODE_ARMED;
 				k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
 				k_timer_stop(&data->increase_sensivity_timer);
+				k_timer_stop(&data->alarm_timer);
 				break;
 			case (ACCEL_SENSOR_MODE_DISARMED):
-			    //зупинка таймера алярма
 				LOG_DBG("ACCEL_SENSOR_MODE_DISARMED");
 			    data->mode = val1;
+				k_timer_stop(&data->alarm_timer);
 				k_timer_stop(&data->refresh_current_pos_timer);
 				k_timer_stop(&data->increase_sensivity_timer);
 				break;
 			case (ACCEL_SENSOR_MODE_TURN_OFF):
-				//зупинка таймера алярма
 				LOG_DBG("ACCEL_SENSOR_MODE_TURN_OFF");
 				data->mode = val1;
+				k_timer_stop(&data->alarm_timer);
 				k_timer_stop(&data->refresh_current_pos_timer);
 				k_timer_stop(&data->increase_sensivity_timer);
 				break;
 			case (ACCEL_SENSOR_MODE_ALARM):
 				if (data->mode == ACCEL_SENSOR_MODE_ARMED) {
-					//тут запуск таймера має бути алярма
+					k_timer_start(&data->alarm_timer, K_MSEC(val2), K_NO_WAIT);
 					LOG_DBG("ACCEL_SENSOR_MODE_ALARM");
 					data->mode = ACCEL_SENSOR_MODE_ALARM;
 				}
@@ -475,7 +489,7 @@ static int _attr_set(const struct device *dev,
 			case (ACCEL_SENSOR_MODE_ALARM_STOP):
 				if (data->mode == ACCEL_SENSOR_MODE_ALARM)
 				{
-					//зупинка таймера алярма
+					k_timer_stop(&data->alarm_timer);
 					LOG_DBG("ACCEL_SENSOR_MODE_ALARM_STOP");
 					data->mode = ACCEL_SENSOR_MODE_ARMED;
 				}
