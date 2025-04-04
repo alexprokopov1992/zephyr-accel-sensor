@@ -507,7 +507,12 @@ static int _attr_set(const struct device *dev,
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_WARN_ZONE) {
 		if (val1 == 0){
 			data->warn_zone_active = false;
+			data->current_warn_zone = 9;
 			data->current_warn_zone = data->selected_warn_zone;
+			create_main_zones(dev, data->current_warn_zone);
+			data->current_main_zone = 0;
+			data->selected_main_zone = data->current_main_zone;
+			LOG_DBG("set warn zone to %d, set main zone to %d", data->current_warn_zone, data->current_main_zone);
 			LOG_DBG("WARN_ZONE disabled");
 			return 0;
 		}
