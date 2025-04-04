@@ -369,8 +369,8 @@ static int init(const struct device *dev)
     sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 50, .val2 = 0 });
 
 	init_warn_zones(dev);
-	set_warn_zone(dev, 0);
-	change_main_zone(dev,0);
+	set_warn_zone(dev, 5);
+	change_main_zone(dev,5);
 
 	// struct accel_sensor_data *data = dev->data;
 	int rc = 0;
@@ -498,6 +498,7 @@ static int _attr_set(const struct device *dev,
     }
 
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_WARN_ZONE) {
+		val1 /= 10;
 		LOG_DBG("Set warn zone to %d", 10 - val1);
 		set_warn_zone(dev, 10 - val1);
 		data->in_warn_alert = false;
@@ -509,6 +510,7 @@ static int _attr_set(const struct device *dev,
 	}
 
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_MAIN_ZONE) {
+		val1 /= 10;
 		LOG_DBG("Set main zone to %d", 10 - val1);
 		change_main_zone(dev, 10 - val1);
 		data->in_warn_alert = false;
