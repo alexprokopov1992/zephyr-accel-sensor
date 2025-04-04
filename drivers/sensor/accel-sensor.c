@@ -232,8 +232,7 @@ static void set_warn_zone(const struct device *dev, int zone)
 	data->selected_warn_zone = zone;
 	data->current_warn_zone = zone;
 	create_main_zones(dev, zone);
-	data->current_main_zone = 0;
-	data->selected_main_zone = 0;
+	data->current_main_zone = data->selected_main_zone;
 }
 
 static void change_main_zone(const struct device *dev, int zone)
@@ -510,8 +509,7 @@ static int _attr_set(const struct device *dev,
 			data->current_warn_zone = 9;
 			data->current_warn_zone = data->selected_warn_zone;
 			create_main_zones(dev, data->current_warn_zone);
-			data->current_main_zone = 0;
-			data->selected_main_zone = data->current_main_zone;
+			data->current_main_zone = data->selected_main_zone;
 			LOG_DBG("set warn zone to %d, set main zone to %d", data->current_warn_zone, data->current_main_zone);
 			LOG_DBG("WARN_ZONE disabled");
 			return 0;
