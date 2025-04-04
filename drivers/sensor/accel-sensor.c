@@ -141,7 +141,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
 		return;
 	}
-	if (pow_cos_theta < data->main_zone_cos_pow2[data->current_main_zone])
+	if (pow_cos_theta < data->main_zone_cos_pow2[data->current_main_zone] && data->main_zone_active)
 	{
 		if (!data->max_main_alert_level){
 			data->main_handler(dev, data->main_trigger);
@@ -152,7 +152,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 			k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 		}
 		
-	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone]){
+	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone] && data->warn_zone_active) {
 		if (!data->max_warn_alert_level) {
 			data->in_warn_alert = true;
 			data->warn_handler(dev, data->warn_trigger);
@@ -301,16 +301,19 @@ static void increase_sensivity_timer_handler(struct k_timer *timer)
 	if (data->mode == ACCEL_SENSOR_MODE_ARMED)
 	{
 		float pow_cos_theta = cospow2_between_vectors(data->ref_acc, data->last_acc);
-		while (data->current_main_zone > data->selected_main_zone)
+		if (data->main_zone_active)
 		{
-			if (data->main_zone_cos_pow2[data->current_main_zone] < pow_cos_theta) {
-				data->current_main_zone--;
-			} else {
-				data->current_main_zone++;
-				break;
+			while (data->current_main_zone > data->selected_main_zone)
+			{
+				if (data->main_zone_cos_pow2[data->current_main_zone] < pow_cos_theta) {
+					data->current_main_zone--;
+				} else {
+					data->current_main_zone++;
+					break;
+				}
 			}
 		}
-		if (data->current_main_zone == data->selected_main_zone)
+		if (data->current_main_zone == data->selected_main_zone && data->warn_zone_active)
 		{
 			while (data->current_warn_zone > data->selected_warn_zone)
 			{
@@ -394,6 +397,8 @@ static int init(const struct device *dev)
 	data->in_main_alert = false;
 	data->max_warn_alert_level = false;
 	data->max_main_alert_level = false;
+	data->warn_zone_active = true;
+	data->main_zone_active = true;
 	data->mode = ACCEL_SENSOR_MODE_DISARMED;
 	k_timer_init(&data->refresh_current_pos_timer, refresh_current_pos_timer_handler, NULL);
 	k_timer_init(&data->increase_sensivity_timer, increase_sensivity_timer_handler, NULL);
@@ -498,6 +503,12 @@ static int _attr_set(const struct device *dev,
     }
 
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_WARN_ZONE) {
+		if (val1 == 0){
+			data->warn_zone_active = false;
+			data->current_warn_zone = data->selected_warn_zone;
+			LOG_DBG("WARN_ZONE disabled");
+			return 0;
+		}
 		val1 /= 10;
 		LOG_DBG("Set warn zone to %d", 10 - val1);
 		set_warn_zone(dev, 10 - val1);
@@ -505,11 +516,19 @@ static int _attr_set(const struct device *dev,
 		data->in_main_alert = false;
 		data->max_warn_alert_level = false;
 		data->max_main_alert_level = false;
+		data->warn_zone_active = true;
 		k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
 		k_timer_stop(&data->increase_sensivity_timer);
+		return 0;
 	}
 
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_MAIN_ZONE) {
+		if (val1 == 0){
+			data->main_zone_active = false;
+			data->current_main_zone = data->selected_main_zone;
+			LOG_DBG("MAIN_ZONE disabled");
+			return 0;
+		}
 		val1 /= 10;
 		LOG_DBG("Set main zone to %d", 10 - val1);
 		change_main_zone(dev, 10 - val1);
@@ -517,9 +536,10 @@ static int _attr_set(const struct device *dev,
 		data->in_main_alert = false;
 		data->max_warn_alert_level = false;
 		data->max_main_alert_level = false;
+		data->main_zone_active = true;
 		k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
 		k_timer_stop(&data->increase_sensivity_timer);
-
+		return 0;
 	}
 
 	return -ENOTSUP;
