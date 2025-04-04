@@ -139,7 +139,6 @@ static void adc_vbus_work_handler(struct k_work *work)
 	float pow_cos_theta = cospow2_between_vectors(data->ref_acc, current_acc);
 	if (pow_cos_theta == 0) {
 		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
-		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
 		return;
 	}
 	if (pow_cos_theta < data->main_zone_cos_pow2[data->current_main_zone] && data->main_zone_active)
@@ -468,7 +467,8 @@ static int _attr_set(const struct device *dev,
 				data->ref_acc.x = 0;
 				data->ref_acc.y = 0;
 				data->ref_acc.z = 0;
-				k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+				k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
+				// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 				// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
 				k_timer_stop(&data->increase_sensivity_timer);
 				k_timer_stop(&data->alarm_timer);
@@ -519,7 +519,8 @@ static int _attr_set(const struct device *dev,
 			data->ref_acc.x = 0;
 			data->ref_acc.y = 0;
 			data->ref_acc.z = 0;
-			k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+			k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
+			// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 			LOG_DBG("WARN_ZONE disabled");
 			return 0;
 		}
@@ -534,7 +535,8 @@ static int _attr_set(const struct device *dev,
 		data->ref_acc.x = 0;
 		data->ref_acc.y = 0;
 		data->ref_acc.z = 0;
-		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
+		// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 		// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
 		k_timer_stop(&data->increase_sensivity_timer);
 		return 0;
@@ -547,7 +549,8 @@ static int _attr_set(const struct device *dev,
 			data->ref_acc.x = 0;
 			data->ref_acc.y = 0;
 			data->ref_acc.z = 0;
-			k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+			k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
+			// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 			LOG_DBG("MAIN_ZONE disabled");
 			return 0;
 		}
@@ -562,7 +565,8 @@ static int _attr_set(const struct device *dev,
 		data->ref_acc.x = 0;
 		data->ref_acc.y = 0;
 		data->ref_acc.z = 0;
-		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
+		// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 		// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
 		k_timer_stop(&data->increase_sensivity_timer);
 		return 0;
