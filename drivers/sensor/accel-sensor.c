@@ -205,15 +205,13 @@ static void init_warn_zones(const struct device *dev)
 		float angle_rad = data->warn_zone_cos_pow2[i] * (M_PIf / 180.0f);
 		data->warn_zone_cos_pow2[i] = cosf(angle_rad) * cosf(angle_rad);
 	}
-
-	return 0;
 }
 
 static void create_main_zones(const struct device *dev, int warn_zone)
 {
 	struct accel_sensor_data *data = dev->data;
 	data->main_zone_cos_pow2[0] = warn_zone_start_angle + (float)(warn_zone + 1) * warn_zone_step_angle;
-	float step = (max_angle - data->main_zone_cos_pow2[0]) / 9.0;
+	float step = (max_angle - data->main_zone_cos_pow2[0]) / (float)9.0;
 	for (int i = 1; i < 10; i++)
 	{
 		data->main_zone_cos_pow2[i] = data->main_zone_cos_pow2[i-1] + step;
@@ -226,7 +224,6 @@ static void create_main_zones(const struct device *dev, int warn_zone)
 		float angle_rad = data->main_zone_cos_pow2[i] * (M_PIf / 180.0f);
 		data->main_zone_cos_pow2[i] = cosf(angle_rad) * cosf(angle_rad);
 	}
-	return 0;
 }
 
 static void set_warn_zone(const struct device *dev, int zone)
@@ -247,12 +244,12 @@ static void change_main_zone(const struct device *dev, int zone)
 	data->current_warn_zone = data->selected_warn_zone;
 }
 
-static void change_warn_zone(const struct device *dev, int zone)
-{
-	struct accel_sensor_data *data = dev->data;
-	data->selected_warn_zone = zone;
-	data->current_warn_zone = zone;
-}
+// static void change_warn_zone(const struct device *dev, int zone)
+// {
+// 	struct accel_sensor_data *data = dev->data;
+// 	data->selected_warn_zone = zone;
+// 	data->current_warn_zone = zone;
+// }
 
 // API
 static int _save_current_positoin_as_reference(const struct device *dev)
@@ -276,7 +273,7 @@ static void refresh_current_pos_timer_handler(struct k_timer *timer)
 				data->ref_acc = data->last_acc;
 				LOG_DBG("ref_acc Refreshed");
 			}  
-			LOG_DBG("cosinuses: %.8f %.8f", pow_cos_theta, cos_pow_0_5); 
+			LOG_DBG("cosinuses: %.8f %.8f", (double)pow_cos_theta, (double)cos_pow_0_5); 
 		}
 	} else {
 		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(5), K_NO_WAIT);
