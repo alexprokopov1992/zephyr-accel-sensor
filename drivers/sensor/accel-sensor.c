@@ -308,6 +308,7 @@ static void increase_sensivity_timer_handler(struct k_timer *timer)
 				if (data->main_zone_cos_pow2[data->current_main_zone] < pow_cos_theta) {
 					data->current_main_zone--;
 				} else {
+					if (data->current_main_zone == 9) break;
 					data->current_main_zone++;
 					break;
 				}
@@ -320,6 +321,7 @@ static void increase_sensivity_timer_handler(struct k_timer *timer)
 				if (data->warn_zone_cos_pow2[data->current_warn_zone] < pow_cos_theta) {
 					data->current_warn_zone--;
 				} else {
+					if (data->current_warn_zone == 9) break;
 					data->current_warn_zone++;
 					break;
 				}
