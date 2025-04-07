@@ -9,8 +9,8 @@
 #include "accel-sensor.h"
 #include <math.h>
 
-LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
-// LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
+// LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 
 #if !defined(M_PIf)
 #define M_PIf 3.1415927f
@@ -525,6 +525,7 @@ static int _attr_set(const struct device *dev,
 						k_timer_stop(&data->increase_sensivity_timer);
 						return 0;
 					case (ACCEL_SENSOR_MODE_ALARM):
+						//Прибрати
 						k_timer_start(&data->alarm_timer, K_MSEC(STOP_ACCEL_ALARM_INTERVAL), K_NO_WAIT);
 						LOG_INF("Testing in %d ms", STOP_ACCEL_ALARM_INTERVAL);
 						return 0;
