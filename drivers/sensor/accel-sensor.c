@@ -9,8 +9,8 @@
 #include "accel-sensor.h"
 #include <math.h>
 
-// LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
-LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
+// LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 
 #if !defined(M_PIf)
 #define M_PIf 3.1415927f
@@ -18,6 +18,9 @@ LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 
 #define REFRESH_POS_TIME 3600
 #define INCREASE_SENSIVITY_TIME 10
+
+#define MIN_WARN_INTERVAL 2000 // ms
+#define STOP_ACCEL_ALARM_INTERVAL 5000
 
 static float warn_zone_start_angle = 1.0;
 static float warn_zone_step_angle = 2.0/9.0;
@@ -142,24 +145,32 @@ static void adc_vbus_work_handler(struct k_work *work)
 		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
 		return;
 	}
+
+	int64_t current_time = k_uptime_get();
+
 	if (pow_cos_theta < data->main_zone_cos_pow2[data->current_main_zone] && data->main_zone_active)
 	{
 		if (!data->max_main_alert_level){
-			data->main_handler(dev, data->main_trigger);
+			data->mode = ACCEL_SENSOR_MODE_ALARM;
 			data->in_warn_alert = true;
 			data->in_main_alert = true;
 			coarsering(data, 1);
+			data->last_trigger_time_main = current_time;
 			LOG_DBG("MAIN TRIGGER");
+			data->main_handler(dev, data->main_trigger);
 			k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 		}
 		
 	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone] && data->warn_zone_active) {
 		if (!data->max_warn_alert_level) {
-			data->in_warn_alert = true;
-			data->warn_handler(dev, data->warn_trigger);
-			coarsering(data, 0);
-			LOG_DBG("WARN TRIGGER");
-			k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+			if (current_time - data->last_trigger_time_warn > MIN_WARN_INTERVAL) {
+				data->in_warn_alert = true;
+				coarsering(data, 0);
+				data->last_trigger_time_warn = current_time;
+				LOG_DBG("WARN TRIGGER");
+				data->warn_handler(dev, data->warn_trigger);
+				k_timer_start(&data->increase_sensivity_timer, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+			}
 		}	
 	}
 
@@ -449,64 +460,131 @@ static int _attr_set(const struct device *dev,
     int val1,
     int val2)
 {
-	printk("attr_set called: chan=%d, val1=%d, val2=%d\n", chan, val1, val2);
+	printk("accel_attr_set called: chan=%d, val1=%d, val2=%d\n", chan, val1, val2);
 	struct accel_sensor_data *data = dev->data;
 
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_MODE) {
-		if (val1 == data->mode) return 0;
-
-        switch(val1){
+		
+		switch (data->mode) {
 			case (ACCEL_SENSOR_MODE_ARMED):
-				LOG_DBG("ACCEL_SENSOR_MODE_ARMED");
-				data->current_main_zone = data->selected_main_zone;
-				data->current_warn_zone = data->selected_warn_zone;
-				data->in_warn_alert = false;
-				data->in_main_alert = false;
-				data->max_warn_alert_level = false;
-				data->max_main_alert_level = false;
-				data->mode = ACCEL_SENSOR_MODE_ARMED;
-				data->ref_acc.x = 0;
-				data->ref_acc.y = 0;
-				data->ref_acc.z = 0;
-				k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
-				// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
-				// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
-				k_timer_stop(&data->increase_sensivity_timer);
-				k_timer_stop(&data->alarm_timer);
-				break;
+				switch (val1) {
+					case (ACCEL_SENSOR_MODE_ARMED):
+						return 0;
+					case (ACCEL_SENSOR_MODE_DISARMED):
+						LOG_DBG("ACCEL_SENSOR_MODE_DISARMED");
+						data->mode = val1;
+						k_timer_stop(&data->alarm_timer);
+						k_timer_stop(&data->refresh_current_pos_timer);
+						k_timer_stop(&data->increase_sensivity_timer);
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM):
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM_STOP):
+						return 0;
+					default:
+						return -ENOTSUP;
+				}
 			case (ACCEL_SENSOR_MODE_DISARMED):
-				LOG_DBG("ACCEL_SENSOR_MODE_DISARMED");
-			    data->mode = val1;
-				k_timer_stop(&data->alarm_timer);
-				k_timer_stop(&data->refresh_current_pos_timer);
-				k_timer_stop(&data->increase_sensivity_timer);
-				break;
-			case (ACCEL_SENSOR_MODE_TURN_OFF):
-				LOG_DBG("ACCEL_SENSOR_MODE_TURN_OFF");
-				data->mode = val1;
-				k_timer_stop(&data->alarm_timer);
-				k_timer_stop(&data->refresh_current_pos_timer);
-				k_timer_stop(&data->increase_sensivity_timer);
-				break;
+				switch (val1) {
+					case (ACCEL_SENSOR_MODE_ARMED):
+						LOG_DBG("ACCEL_SENSOR_MODE_ARMED");
+						data->current_main_zone = data->selected_main_zone;
+						data->current_warn_zone = data->selected_warn_zone;
+						data->in_warn_alert = false;
+						data->in_main_alert = false;
+						data->max_warn_alert_level = false;
+						data->max_main_alert_level = false;
+						data->mode = ACCEL_SENSOR_MODE_ARMED;
+						data->ref_acc.x = 0;
+						data->ref_acc.y = 0;
+						data->ref_acc.z = 0;
+						k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
+						// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+						// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
+						k_timer_stop(&data->increase_sensivity_timer);
+						k_timer_stop(&data->alarm_timer);
+						return 0;
+					case (ACCEL_SENSOR_MODE_DISARMED):
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM):
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM_STOP):
+						return 0;
+					default:
+						return -ENOTSUP;
+				}
 			case (ACCEL_SENSOR_MODE_ALARM):
-				if (data->mode == ACCEL_SENSOR_MODE_ARMED) {
-					k_timer_start(&data->alarm_timer, K_MSEC(val2), K_NO_WAIT);
-					LOG_DBG("ACCEL_SENSOR_MODE_ALARM");
-					data->mode = ACCEL_SENSOR_MODE_ALARM;
+				switch (val1) {
+					case (ACCEL_SENSOR_MODE_ARMED):
+						return 0;
+					case (ACCEL_SENSOR_MODE_DISARMED):
+						LOG_DBG("ACCEL_SENSOR_MODE_DISARMED");
+						data->mode = val1;
+						k_timer_stop(&data->alarm_timer);
+						k_timer_stop(&data->refresh_current_pos_timer);
+						k_timer_stop(&data->increase_sensivity_timer);
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM):
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM_STOP):
+						k_timer_start(&data->alarm_timer, K_MSEC(STOP_ACCEL_ALARM_INTERVAL), K_NO_WAIT);
+						LOG_INF("Alarm mode stoped in %d ms", STOP_ACCEL_ALARM_INTERVAL);
+						return 0;
+					default:
+						return -ENOTSUP;
 				}
-				break;
 			case (ACCEL_SENSOR_MODE_ALARM_STOP):
-				if (data->mode == ACCEL_SENSOR_MODE_ALARM)
-				{
-					k_timer_stop(&data->alarm_timer);
-					LOG_DBG("ACCEL_SENSOR_MODE_ALARM_STOP");
-					data->mode = ACCEL_SENSOR_MODE_ARMED;
-				}
-				break;
+				return 0;
 			default:
-				break;
+				return -ENOTSUP;
 		}
-        return 0;
+		
+		// if (val1 == data->mode) return 0;
+        // switch(val1){
+		// 	case (ACCEL_SENSOR_MODE_ARMED):
+		// 		LOG_DBG("ACCEL_SENSOR_MODE_ARMED");
+		// 		data->current_main_zone = data->selected_main_zone;
+		// 		data->current_warn_zone = data->selected_warn_zone;
+		// 		data->in_warn_alert = false;
+		// 		data->in_main_alert = false;
+		// 		data->max_warn_alert_level = false;
+		// 		data->max_main_alert_level = false;
+		// 		data->mode = ACCEL_SENSOR_MODE_ARMED;
+		// 		data->ref_acc.x = 0;
+		// 		data->ref_acc.y = 0;
+		// 		data->ref_acc.z = 0;
+		// 		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
+		// 		// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+		// 		// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
+		// 		k_timer_stop(&data->increase_sensivity_timer);
+		// 		k_timer_stop(&data->alarm_timer);
+		// 		break;
+		// 	case (ACCEL_SENSOR_MODE_DISARMED):
+		// 		LOG_DBG("ACCEL_SENSOR_MODE_DISARMED");
+		// 	    data->mode = val1;
+		// 		k_timer_stop(&data->alarm_timer);
+		// 		k_timer_stop(&data->refresh_current_pos_timer);
+		// 		k_timer_stop(&data->increase_sensivity_timer);
+		// 		break;
+		// 	case (ACCEL_SENSOR_MODE_ALARM):
+		// 		if (data->mode == ACCEL_SENSOR_MODE_ARMED) {
+		// 			k_timer_start(&data->alarm_timer, K_MSEC(val2), K_NO_WAIT);
+		// 			LOG_DBG("ACCEL_SENSOR_MODE_ALARM");
+		// 			data->mode = ACCEL_SENSOR_MODE_ALARM;
+		// 		}
+		// 		break;
+		// 	case (ACCEL_SENSOR_MODE_ALARM_STOP):
+		// 		if (data->mode == ACCEL_SENSOR_MODE_ALARM)
+		// 		{
+		// 			k_timer_stop(&data->alarm_timer);
+		// 			LOG_DBG("ACCEL_SENSOR_MODE_ALARM_STOP");
+		// 			data->mode = ACCEL_SENSOR_MODE_ARMED;
+		// 		}
+		// 		break;
+		// 	default:
+		// 		break;
+		// }
+        // return 0;
     }
 
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_WARN_ZONE) {

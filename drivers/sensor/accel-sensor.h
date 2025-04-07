@@ -6,7 +6,6 @@
 enum accel_sensor_mode {
     ACCEL_SENSOR_MODE_ARMED=0,
     ACCEL_SENSOR_MODE_DISARMED,
-    ACCEL_SENSOR_MODE_TURN_OFF,
     ACCEL_SENSOR_MODE_ALARM,
     ACCEL_SENSOR_MODE_ALARM_STOP,
 };
@@ -61,6 +60,10 @@ struct accel_sensor_data {
 	bool max_main_alert_level;
 	bool warn_zone_active;
 	bool main_zone_active;
+
+	int64_t last_trigger_time_warn;
+    int64_t last_trigger_time_main;
+
 	struct k_timer refresh_current_pos_timer;
 	struct k_timer increase_sensivity_timer;
 	struct k_timer alarm_timer;
