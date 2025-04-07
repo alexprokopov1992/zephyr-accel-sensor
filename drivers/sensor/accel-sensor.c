@@ -592,6 +592,7 @@ static int _attr_set(const struct device *dev,
 
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_WARN_ZONE) {
 		if (val1 == 0){
+			k_timer_stop(&data->increase_sensivity_timer);
 			data->warn_zone_active = false;
 			data->selected_warn_zone = 9;
 			data->current_warn_zone = data->selected_warn_zone;
@@ -608,6 +609,7 @@ static int _attr_set(const struct device *dev,
 		}
 		val1 /= 10;
 		LOG_DBG("Set warn zone to %d", 10 - val1);
+		k_timer_stop(&data->increase_sensivity_timer);
 		set_warn_zone(dev, 10 - val1);
 		data->in_warn_alert = false;
 		data->in_main_alert = false;
@@ -620,12 +622,12 @@ static int _attr_set(const struct device *dev,
 		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
 		// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 		// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
-		k_timer_stop(&data->increase_sensivity_timer);
 		return 0;
 	}
 
 	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_MAIN_ZONE) {
 		if (val1 == 0){
+			k_timer_stop(&data->increase_sensivity_timer);
 			data->main_zone_active = false;
 			data->current_main_zone = data->selected_main_zone;
 			data->ref_acc.x = 0;
@@ -638,6 +640,7 @@ static int _attr_set(const struct device *dev,
 		}
 		val1 /= 10;
 		LOG_DBG("Set main zone to %d", 10 - val1);
+		k_timer_stop(&data->increase_sensivity_timer);
 		change_main_zone(dev, 10 - val1);
 		data->in_warn_alert = false;
 		data->in_main_alert = false;
@@ -650,7 +653,6 @@ static int _attr_set(const struct device *dev,
 		k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
 		// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 		// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
-		k_timer_stop(&data->increase_sensivity_timer);
 		return 0;
 	}
 
