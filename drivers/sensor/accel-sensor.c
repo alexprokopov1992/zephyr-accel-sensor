@@ -18,7 +18,7 @@ LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 
 #define REFRESH_POS_TIME 3600
 #define INCREASE_SENSIVITY_TIME 10
-
+#define ARMING_DELAY_SEC 10
 #define MIN_WARN_INTERVAL 2000 // ms
 #define STOP_ACCEL_ALARM_INTERVAL 5000
 
@@ -498,7 +498,7 @@ static int _attr_set(const struct device *dev,
 						data->ref_acc.x = 0;
 						data->ref_acc.y = 0;
 						data->ref_acc.z = 0;
-						k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(2), K_NO_WAIT);
+						k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(ARMING_DELAY_SEC), K_NO_WAIT);
 						// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 						// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(500), K_NO_WAIT);
 						k_timer_stop(&data->increase_sensivity_timer);
