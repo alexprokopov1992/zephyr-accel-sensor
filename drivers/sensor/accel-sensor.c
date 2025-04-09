@@ -526,8 +526,8 @@ static int _attr_set(const struct device *dev,
 						return 0;
 					case (ACCEL_SENSOR_MODE_ALARM):
 						//Прибрати
-						k_timer_start(&data->alarm_timer, K_MSEC(STOP_ACCEL_ALARM_INTERVAL), K_NO_WAIT);
-						LOG_INF("Testing in %d ms", STOP_ACCEL_ALARM_INTERVAL);
+						// k_timer_start(&data->alarm_timer, K_MSEC(STOP_ACCEL_ALARM_INTERVAL), K_NO_WAIT);
+						// LOG_INF("Testing in %d ms", STOP_ACCEL_ALARM_INTERVAL);
 						return 0;
 					case (ACCEL_SENSOR_MODE_ALARM_STOP):
 						k_timer_start(&data->alarm_timer, K_MSEC(STOP_ACCEL_ALARM_INTERVAL), K_NO_WAIT);
