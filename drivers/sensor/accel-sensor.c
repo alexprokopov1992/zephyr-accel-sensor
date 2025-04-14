@@ -303,6 +303,25 @@ static void refresh_current_pos_timer_handler_tilt(struct k_timer *timer)
 	k_timer_start(&data->refresh_current_pos_timer_tilt, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 }
 
+static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
+{
+	LOG_DBG("Refreshing ref_acc_move");
+    struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, refresh_current_pos_timer_move);
+	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED)
+	{
+		if (!data->in_warn_alert_move && !data->in_main_alert_move)
+		{
+			//додати умову
+			data->ref_acc_move = data->last_acc_move;
+			LOG_DBG("ref_acc_move Refreshed");
+		}
+	} else {
+		k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(5), K_NO_WAIT);
+		return;
+	}
+	k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+}
+
 static void alarm_timer_handler_tilt(struct k_timer *timer)
 {
 	LOG_DBG("Alarm timer expired");
@@ -310,6 +329,16 @@ static void alarm_timer_handler_tilt(struct k_timer *timer)
 	if (data->mode_tilt == ACCEL_SENSOR_MODE_ALARM) {
 		LOG_DBG("ACCEL_SENSOR_MODE_ARMED");
 		data->mode_tilt = ACCEL_SENSOR_MODE_ARMED;
+	}
+}
+
+static void alarm_timer_handler_move(struct k_timer *timer)
+{
+	LOG_DBG("Alarm timer expired");
+	struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, alarm_timer_move);
+	if (data->mode_move == ACCEL_SENSOR_MODE_ALARM) {
+		LOG_DBG("ACCEL_SENSOR_MODE_ARMED_MOVE");
+		data->mode_move = ACCEL_SENSOR_MODE_ARMED;
 	}
 }
 
@@ -377,6 +406,43 @@ static void increase_sensivity_timer_handler_tilt(struct k_timer *timer)
 	}
 }
 
+static void increase_sensivity_timer_handler_move(struct k_timer *timer)
+{
+	struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, increase_sensivity_timer_move);
+	int prev_warn_zone = data->current_warn_zone_move;
+	int prev_main_zone = data->current_main_zone_move;
+	LOG_DBG("Trying increase sensivity");
+	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED)
+	{
+		//реалізувати
+	} else {
+		k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(30), K_NO_WAIT);
+		return;
+	}
+
+	if (data->current_main_zone_move != prev_main_zone){
+		LOG_DBG("Main zone changed from %d to %d", prev_main_zone, data->current_main_zone_move);
+		data->max_main_alert_level_move = false;
+	}
+
+	if (data->current_warn_zone_move != prev_warn_zone){
+		LOG_DBG("Warn zone changed from %d to %d", prev_warn_zone, data->current_warn_zone_move);
+		data->max_warn_alert_level_move = false;
+	} 
+
+	if (data->current_warn_zone_move == data->selected_warn_zone_move) {
+		data->in_warn_alert_move = false;
+	}
+
+	if (data->current_main_zone_move == data->selected_main_zone_move) {
+		data->in_main_alert_move = false;
+	}
+
+	if (data->in_warn_alert_move || data->in_main_alert_move) {
+		k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+	}
+}
+
 static int init(const struct device *dev)
 {
 	const struct accel_sensor_config *cfg = dev->config;
@@ -416,6 +482,7 @@ static int init(const struct device *dev)
     #endif
     
 	LOG_DBG("Starting periodic measurements (%d ms)", data->sampling_period_ms);
+	//нахил
 	data->in_warn_alert_tilt = false;
 	data->in_main_alert_tilt = false;
 	data->max_warn_alert_level_tilt = false;
@@ -426,6 +493,17 @@ static int init(const struct device *dev)
 	k_timer_init(&data->refresh_current_pos_timer_tilt, refresh_current_pos_timer_handler_tilt, NULL);
 	k_timer_init(&data->increase_sensivity_timer_tilt, increase_sensivity_timer_handler_tilt, NULL);
 	k_timer_init(&data->alarm_timer_tilt, alarm_timer_handler_tilt, NULL);
+	//переміщення
+	data->in_warn_alert_move = false;
+	data->in_main_alert_move = false;
+	data->max_warn_alert_level_move = false;
+	data->max_main_alert_level_move = false;
+	data->warn_zone_active_move = true;
+	data->main_zone_active_move = true;
+	data->mode_move = ACCEL_SENSOR_MODE_DISARMED;
+	k_timer_init(&data->refresh_current_pos_timer_move, refresh_current_pos_timer_handler_move, NULL);
+	k_timer_init(&data->increase_sensivity_timer_move, increase_sensivity_timer_handler_move, NULL);
+	k_timer_init(&data->alarm_timer_move, alarm_timer_handler_move, NULL);
 	// TODO: Напевно треба перенести в макрос визначення змінної
 	k_work_init_delayable(&data->dwork, adc_vbus_work_handler);
 	k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
