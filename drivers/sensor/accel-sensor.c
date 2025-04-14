@@ -181,7 +181,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 				data->in_main_alert_tilt = true;
 				coarsering_tilt(data, 1);
 				data->last_trigger_time_main_tilt = current_time;
-				LOG_DBG("MAIN TRIGGER");
+				LOG_DBG("MAIN TRIGGER TILT");
 				data->main_handler_tilt(dev, data->main_trigger_tilt);
 				k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 			}
@@ -192,7 +192,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 					data->in_warn_alert_tilt = true;
 					coarsering_tilt(data, 0);
 					data->last_trigger_time_warn_tilt = current_time;
-					LOG_DBG("WARN TRIGGER");
+					LOG_DBG("WARN TRIGGER TILT");
 					data->warn_handler_tilt(dev, data->warn_trigger_tilt);
 					k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 				}
@@ -207,6 +207,8 @@ static void adc_vbus_work_handler(struct k_work *work)
 	}
 
 	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED){
+
+		int64_t current_time = k_uptime_get();
 		if (data->samples_count_move >= MOVE_SENSOR_SAMPLE_COUNT){
 			data->last_acc_move.x = data->summary_acc_move.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
 			data->last_acc_move.y = data->summary_acc_move.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
@@ -217,6 +219,33 @@ static void adc_vbus_work_handler(struct k_work *work)
 			data->samples_count_move = 0;
 			_Vector3 accelerate = {data->last_acc_move.x - data->ref_acc_move.x, data->last_acc_move.y - data->ref_acc_move.y, data->last_acc_move.z - data->ref_acc_move.z};
 			float accel = vector_length(accelerate);
+			if (accel > data->main_zone_move[data->current_main_zone_move] && data->main_zone_active_move)
+			{
+				if (!data->max_main_alert_level_move){
+					data->mode_move = ACCEL_SENSOR_MODE_ALARM;
+					data->in_warn_alert_move = true;
+					data->in_main_alert_move = true;
+					//загрублення
+					LOG_DBG("Move Main zone move triggered");
+					data->last_trigger_time_main_move = current_time;
+					data->main_handler_move(dev, data->main_trigger_move);
+					k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+				}
+			} else {
+				if (accel > data->warn_zone_move[data->current_warn_zone_move] && data->warn_zone_active_move) {
+					if (!data->max_warn_alert_level_move) {
+						if (current_time - data->last_trigger_time_warn_move > MIN_WARN_INTERVAL) {
+							data->in_warn_alert_move = true;
+							//загрублення
+							LOG_DBG("Move Warn zone move triggered");
+							data->last_trigger_time_warn_move = current_time;
+							data->warn_handler_move(dev, data->warn_trigger_move);
+							k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+						}
+					}
+				}
+			}
+
 			LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f", (double)data->last_acc_move.x, (double)data->last_acc_move.y, (double)data->last_acc_move.z, (double)accel);
 		} else {
 			data->summary_acc_move.x += ax;
@@ -532,7 +561,7 @@ static int init(const struct device *dev)
 
 	const struct device *mma = data->accel_dev;
 	sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_FULL_SCALE, &(struct sensor_value){ .val1 = 2, .val2 = 0 });
-    sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 50, .val2 = 0 });
+    sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 20, .val2 = 0 });
 
 	init_warn_zones_tilt(dev);
 	set_warn_zone_tilt(dev, 5);
