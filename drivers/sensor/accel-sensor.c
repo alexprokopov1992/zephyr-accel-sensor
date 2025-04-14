@@ -16,6 +16,9 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 #define M_PIf 3.1415927f
 #endif
 
+#define MOVE_SENSOR_SAMPLE_TIME 100
+#define ACCEL_SENSOR_SAMPLE_TIME 1000
+
 #define REFRESH_POS_TIME 3600
 #define INCREASE_SENSIVITY_TIME 10
 #define ARMING_DELAY_SEC 10
@@ -26,6 +29,8 @@ static float warn_zone_start_angle = 1.0;
 static float warn_zone_step_angle = 2.0/9.0;
 static float max_angle = 10.00;
 static const float cos_pow_0_5  = 0.999961923;
+
+static float border_move = 0.0005;
 
 static float warn_zone_accel_mult = 0.001;
 static float warn_zone_step_accel_mult_step = 0.001;
@@ -342,7 +347,7 @@ static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 				LOG_DBG("ref_acc_move Refreshed Init %.6f", (double)data->gravity);
 			} else {
 				float change = (data->gravity - accel)/data->gravity;
-				if ( change < 0.0005 && change > -0.0005)
+				if ( change < border_move && change > -border_move)
 				{
 					data->gravity = accel;
 					data->ref_acc_move = data->last_acc_move;
@@ -686,6 +691,7 @@ static int _attr_set(const struct device *dev,
 					case (ACCEL_SENSOR_MODE_DISARMED):
 						LOG_DBG("ACCEL_SENSOR_MODE_DISARMED_MOVE");
 						data->mode_move = val1;
+						data->sampling_period_ms = ACCEL_SENSOR_SAMPLE_TIME;
 						k_timer_stop(&data->alarm_timer_move);
 						k_timer_stop(&data->refresh_current_pos_timer_move);
 						k_timer_stop(&data->increase_sensivity_timer_move);
@@ -701,6 +707,7 @@ static int _attr_set(const struct device *dev,
 				switch (val1) {
 					case (ACCEL_SENSOR_MODE_ARMED):
 						LOG_DBG("ACCEL_SENSOR_MODE_ARMED_MOVE");
+						data->sampling_period_ms = MOVE_SENSOR_SAMPLE_TIME;
 						data->current_main_zone_move = data->selected_main_zone_move;
 						data->current_warn_zone_move = data->selected_warn_zone_move;
 						data->in_warn_alert_move = false;
@@ -730,6 +737,7 @@ static int _attr_set(const struct device *dev,
 						return 0;
 					case (ACCEL_SENSOR_MODE_DISARMED):
 						LOG_DBG("ACCEL_SENSOR_MODE_DISARMED_MOVE");
+						data->sampling_period_ms = ACCEL_SENSOR_SAMPLE_TIME;
 						data->mode_move = val1;
 						k_timer_stop(&data->alarm_timer_move);
 						k_timer_stop(&data->refresh_current_pos_timer_move);
