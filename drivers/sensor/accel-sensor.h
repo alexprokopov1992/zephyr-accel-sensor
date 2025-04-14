@@ -72,6 +72,8 @@ struct accel_sensor_data {
 	struct k_timer refresh_current_pos_timer_tilt;
 	struct k_timer increase_sensivity_timer_tilt;
 	struct k_timer alarm_timer_tilt;
+
+	int skip_counter;
 	//поля структури для переміщення
 	sensor_trigger_handler_t warn_handler_move;
     const struct sensor_trigger *warn_trigger_move;

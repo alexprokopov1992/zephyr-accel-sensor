@@ -150,8 +150,20 @@ static void adc_vbus_work_handler(struct k_work *work)
 		return;
 	}
 
+	bool allowed = false;
+	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED) {
+		data->skip_counter++;
+		if (data->skip_counter > 9) {
+			data->skip_counter = 0;
+			allowed = true;
+		} else {
+			allowed = false;
+		}
+	} else {
+		allowed = true;
+	}
 
-	if (data->mode_tilt == ACCEL_SENSOR_MODE_ARMED)
+	if (data->mode_tilt == ACCEL_SENSOR_MODE_ARMED && allowed)
 	{
 		float pow_cos_theta = cospow2_between_vectors(data->ref_acc_tilt, current_acc);
 		if (pow_cos_theta == 0) {
