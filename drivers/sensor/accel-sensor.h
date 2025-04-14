@@ -68,6 +68,31 @@ struct accel_sensor_data {
 	struct k_timer increase_sensivity_timer_tilt;
 	struct k_timer alarm_timer_tilt;
 	//поля структури для переміщення
+	sensor_trigger_handler_t warn_handler_move;
+    const struct sensor_trigger *warn_trigger_move;
+    sensor_trigger_handler_t main_handler_move;
+    const struct sensor_trigger *main_trigger_move;
+	_Vector3 ref_acc_move;
+	_Vector3 last_acc_move;
+	float main_zone_move[10];
+	float warn_zone_move[10];
+	int selected_warn_zone_move;
+	int current_warn_zone_move;
+	int selected_main_zone_move;
+	int current_main_zone_move;
+	int mode_move;
+	bool in_warn_alert_move;
+	bool in_main_alert_move;
+	bool max_warn_alert_level_move;
+	bool max_main_alert_level_move;
+	bool warn_zone_active_move;
+	bool main_zone_active_move;
+
+	int64_t last_trigger_time_warn_move;
+    int64_t last_trigger_time_main_move;
+	struct k_timer refresh_current_pos_timer_move;
+	struct k_timer increase_sensivity_timer_move;
+	struct k_timer alarm_timer_move;
 };
 
 
