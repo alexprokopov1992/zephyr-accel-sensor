@@ -207,7 +207,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 	}
 
 	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED){
-		if (data->samples_count_move == MOVE_SENSOR_SAMPLE_COUNT){
+		if (data->samples_count_move >= MOVE_SENSOR_SAMPLE_COUNT){
 			data->last_acc_move.x = data->summary_acc_move.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
 			data->last_acc_move.y = data->summary_acc_move.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
 			data->last_acc_move.z = data->summary_acc_move.z / (float)MOVE_SENSOR_SAMPLE_COUNT;
@@ -215,7 +215,9 @@ static void adc_vbus_work_handler(struct k_work *work)
 			data->summary_acc_move.y = 0;
 			data->summary_acc_move.z = 0;
 			data->samples_count_move = 0;
-			float accel = vector_length(data->last_acc_move);
+			_Vector3 accelerate = {data->last_acc_move.x - data->ref_acc_move.x, data->last_acc_move.y - data->ref_acc_move.y, data->last_acc_move.z - data->ref_acc_move.z};
+			float accel = vector_length(accelerate);
+			LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f", (double)data->last_acc_move.x, (double)data->last_acc_move.y, (double)data->last_acc_move.z, (double)accel);
 		} else {
 			data->summary_acc_move.x += ax;
 			data->summary_acc_move.y += ay;
@@ -336,10 +338,10 @@ static int _save_current_positoin_as_reference(const struct device *dev)
 
 static void refresh_current_pos_timer_handler_tilt(struct k_timer *timer)
 {
-	LOG_DBG("Refreshing ref_acc_tilt");
     struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, refresh_current_pos_timer_tilt);
 	if (data->mode_tilt == ACCEL_SENSOR_MODE_ARMED)
 	{
+		LOG_DBG("Refreshing ref_acc_tilt");
 		if (!data->in_warn_alert_tilt && !data->in_main_alert_tilt)
 		{
 			float pow_cos_theta = cospow2_between_vectors(data->ref_acc_tilt, data->last_acc_tilt);
