@@ -233,7 +233,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 						data->gravity = acc_len;
 						data->ref_acc_move = data->last_acc_move;
 					} else {
-						if (accel > data->main_zone_move[data->current_main_zone_move] && data->main_zone_active_move)
+						if (accel > data->main_zone_move[data->current_main_zone_move]*data->gravity && data->main_zone_active_move)
 						{
 							if (!data->max_main_alert_level_move){
 								data->mode_move = ACCEL_SENSOR_MODE_ALARM;
@@ -246,7 +246,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 								k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 							}
 						} else {
-							if (accel > data->warn_zone_move[data->current_warn_zone_move] && data->warn_zone_active_move) {
+							if (accel > data->warn_zone_move[data->current_warn_zone_move]*data->gravity && data->warn_zone_active_move) {
 								if (!data->max_warn_alert_level_move) {
 									if (current_time - data->last_trigger_time_warn_move > MIN_WARN_INTERVAL) {
 										data->in_warn_alert_move = true;
@@ -310,24 +310,24 @@ static void init_warn_zones_tilt(const struct device *dev)
 	}
 }
 
-static void refresh_warn_zones_move(struct accel_sensor_data *data)
+static void create_warn_zones_move(const struct device *dev)
 {
-	float current_accel = vector_length(data->ref_acc_move);
+	struct accel_sensor_data *data = dev->data;
 	for (int i = 0; i < 10; i++)
 	{
-		data->warn_zone_move[i] = current_accel * (warn_zone_accel_mult + warn_zone_step_accel_mult_step * i);
+		data->warn_zone_move[i] = warn_zone_accel_mult + warn_zone_step_accel_mult_step * i;
 	}
 	
 }
 
-static void refresh_main_zones_move(struct accel_sensor_data *data, int warn_zone)
+static void create_main_zones_move(const struct device *dev, int warn_zone)
 {
-	float current_accel = vector_length(data->ref_acc_move);
+	struct accel_sensor_data *data = dev->data;
 	float start_mult = warn_zone_step_accel_mult_step * (warn_zone + 2);
 	float step = (main_zone_max_mult - start_mult) / (float)9.0;
 	for (int i = 0; i < 10; i++)
 	{
-		data->main_zone_move[i] = current_accel * (start_mult + step * i);
+		data->main_zone_move[i] = start_mult + step * i;
 	}
 }
 
@@ -418,8 +418,8 @@ static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 			{
 				data->gravity = accel;
 				data->ref_acc_move = data->last_acc_move;
-				refresh_warn_zones_move(data);
-				refresh_main_zones_move(data, data->selected_warn_zone_move);
+				// refresh_warn_zones_move(data);
+				// refresh_main_zones_move(data, data->selected_warn_zone_move);
 				LOG_DBG("ref_acc_move Refreshed Init %.6f", (double)data->gravity);
 			} else {
 				float change = (data->gravity - accel)/data->gravity;
@@ -427,8 +427,8 @@ static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 				{
 					data->gravity = accel;
 					data->ref_acc_move = data->last_acc_move;
-					refresh_warn_zones_move(data);
-					refresh_main_zones_move(data, data->selected_warn_zone_move);
+					// refresh_warn_zones_move(data);
+					// refresh_main_zones_move(data, data->selected_warn_zone_move);
 					LOG_DBG("ref_acc_move Refreshed Gravity change %.6f", (double)data->gravity);
 				} else {
 					LOG_DBG("Move Too big difference %.6f", (double)accel);
@@ -439,7 +439,7 @@ static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 		k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(5), K_NO_WAIT);
 		return;
 	}
-	k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(REFRESH_POS_TIME_MOVE), K_NO_WAIT);
+	// k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(REFRESH_POS_TIME_MOVE), K_NO_WAIT);
 }
 
 static void alarm_timer_handler_tilt(struct k_timer *timer)
@@ -614,6 +614,8 @@ static int init(const struct device *dev)
 	k_timer_init(&data->increase_sensivity_timer_tilt, increase_sensivity_timer_handler_tilt, NULL);
 	k_timer_init(&data->alarm_timer_tilt, alarm_timer_handler_tilt, NULL);
 	//переміщення
+	create_warn_zones_move(dev);
+	create_main_zones_move(dev, data->selected_warn_zone_move);
 	data->in_warn_alert_move = false;
 	data->in_main_alert_move = false;
 	data->max_warn_alert_level_move = false;
@@ -921,6 +923,7 @@ static int _attr_set(const struct device *dev,
 			data->ref_acc_move.y = 0;
 			data->ref_acc_move.z = 0;
 			data->gravity = 0;
+			create_main_zones_move(dev, data->current_warn_zone_move);
 			k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(2), K_NO_WAIT);
 			LOG_DBG("WARN_ZONE_MOVE disabled");
 			return 0;
@@ -929,6 +932,8 @@ static int _attr_set(const struct device *dev,
 		LOG_DBG("Set MOVE warn zone to %d", 10 - val1);
 		k_timer_stop(&data->increase_sensivity_timer_move);
 		data->selected_warn_zone_move = 10 - val1;
+		data->current_warn_zone_move = data->selected_warn_zone_move;
+		create_main_zones_move(dev, data->selected_warn_zone_move);
 		data->current_main_zone_move = data->selected_main_zone_move;
 		data->in_warn_alert_move = false;
 		data->in_main_alert_move = false;
