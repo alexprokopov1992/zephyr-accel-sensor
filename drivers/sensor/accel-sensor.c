@@ -332,20 +332,24 @@ static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 	{
 		if (!data->in_warn_alert_move && !data->in_main_alert_move)
 		{
+			float accel = vector_length(data->last_acc_move);
 			if (data->ref_acc_move.x == 0 && data->ref_acc_move.y == 0 && data->ref_acc_move.z == 0)
 			{
+				data->gravity = accel;
 				data->ref_acc_move = data->last_acc_move;
 				refresh_warn_zones_move(data);
-				// for (int i = 0; i < 10; i++)
-				// {
-				// 	LOG_DBG("Warn zone move[%d]: %f", i, data->warn_zone_move[i]);
-				// }
 				refresh_main_zones_move(data, data->selected_warn_zone_move);
-				// for (int i = 0; i < 10; i++)
-				// {
-				// 	LOG_DBG("Main zone move[%d]: %f", i, data->main_zone_move[i]);
-				// }
-				LOG_DBG("ref_acc_move Refreshed");
+				LOG_DBG("ref_acc_move Refreshed Init %.6f", (double)data->gravity);
+			} else {
+				float change = (data->gravity - accel)/data->gravity;
+				if ( change < 0.0005 && change > -0.0005)
+				{
+					data->gravity = accel;
+					data->ref_acc_move = data->last_acc_move;
+					refresh_warn_zones_move(data);
+					refresh_main_zones_move(data, data->selected_warn_zone_move);
+					LOG_DBG("ref_acc_move Refreshed Gravity change %.6f", (double)data->gravity);
+				}
 			}
 		}
 	} else {

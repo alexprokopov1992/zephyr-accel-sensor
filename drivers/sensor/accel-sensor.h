@@ -93,6 +93,8 @@ struct accel_sensor_data {
 	bool warn_zone_active_move;
 	bool main_zone_active_move;
 
+	float gravity;
+
 	int64_t last_trigger_time_warn_move;
     int64_t last_trigger_time_main_move;
 	struct k_timer refresh_current_pos_timer_move;
