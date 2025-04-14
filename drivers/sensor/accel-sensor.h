@@ -18,6 +18,8 @@ enum accel_sensor_attrs {
 enum accel_sensor_trigger_types {
 	ACCEL_WARN_TRIGGER,
 	ACCEL_MAIN_TRIGGER,
+	ACCEL_WARN_TRIGGER_MOVE,
+	ACCEL_MAIN_TRIGGER_MOVE,
 };
 
 enum accel_sensor_channel {
@@ -25,6 +27,9 @@ enum accel_sensor_channel {
     ACCEL_SENSOR_CHANNEL_WARN_ZONE,
     ACCEL_SENSOR_CHANNEL_MAIN_ZONE,
     ACCEL_SENSOR_INCREASE_SENSIVITY_INTERVAL_SEC,
+	ACCEL_SENSOR_MODE_MOVE,
+	ACCEL_SENSOR_CHANNEL_WARN_ZONE_MOVE,
+	ACCEL_SENSOR_CHANNEL_MAIN_ZONE_MOVE,
 };
 
 struct accel_sensor_config {
@@ -40,33 +45,65 @@ struct accel_sensor_data {
 	uint16_t sampling_period_ms;
 	struct k_work_delayable dwork;
 	const struct device *accel_dev;
-	sensor_trigger_handler_t warn_handler;
-    const struct sensor_trigger *warn_trigger;
-    sensor_trigger_handler_t main_handler;
-    const struct sensor_trigger *main_trigger;
-	_Vector3 ref_acc;		// Еталонне положення пристрою
-	_Vector3 last_acc;		// Останнє виміряне прискорення
-	float main_zone_steps[10];
+	//поля стуртури для нахилу
+	sensor_trigger_handler_t warn_handler_tilt;
+    const struct sensor_trigger *warn_trigger_tilt;
+    sensor_trigger_handler_t main_handler_tilt;
+    const struct sensor_trigger *main_trigger_tilt;
+	_Vector3 ref_acc_tilt;
+	_Vector3 last_acc_tilt;
 	float main_zone_cos_pow2[10];
 	float warn_zone_cos_pow2[10];
-	int selected_warn_zone;
-	int current_warn_zone;
-	int selected_main_zone;
-	int current_main_zone;
-	int mode;
-	bool in_warn_alert;
-	bool in_main_alert;
-	bool max_warn_alert_level;
-	bool max_main_alert_level;
-	bool warn_zone_active;
-	bool main_zone_active;
+	int selected_warn_zone_tilt;
+	int current_warn_zone_tilt;
+	int selected_main_zone_tilt;
+	int current_main_zone_tilt;
+	int mode_tilt;
+	bool in_warn_alert_tilt;
+	bool in_main_alert_tilt;
+	bool max_warn_alert_level_tilt;
+	bool max_main_alert_level_tilt;
+	bool warn_zone_active_tilt;
+	bool main_zone_active_tilt;
 
-	int64_t last_trigger_time_warn;
-    int64_t last_trigger_time_main;
+	int64_t last_trigger_time_warn_tilt;
+    int64_t last_trigger_time_main_tilt;
 
-	struct k_timer refresh_current_pos_timer;
-	struct k_timer increase_sensivity_timer;
-	struct k_timer alarm_timer;
+	struct k_timer refresh_current_pos_timer_tilt;
+	struct k_timer increase_sensivity_timer_tilt;
+	struct k_timer alarm_timer_tilt;
+
+	int skip_counter;
+	//поля структури для переміщення
+	sensor_trigger_handler_t warn_handler_move;
+    const struct sensor_trigger *warn_trigger_move;
+    sensor_trigger_handler_t main_handler_move;
+    const struct sensor_trigger *main_trigger_move;
+	_Vector3 ref_acc_move;
+	_Vector3 last_acc_move;
+	float main_zone_move[10];
+	float warn_zone_move[10];
+	int selected_warn_zone_move;
+	int current_warn_zone_move;
+	int selected_main_zone_move;
+	int current_main_zone_move;
+	int mode_move;
+	bool max_warn_alert_level_move;
+	bool max_main_alert_level_move;
+	bool warn_zone_active_move;
+	bool main_zone_active_move;
+
+    int samples_count_move;
+	_Vector3 summary_acc_move;
+
+	float gravity;
+
+	int64_t last_trigger_time_warn_move;
+    int64_t last_trigger_time_main_move;
+	struct k_timer refresh_current_pos_timer_move;
+	struct k_timer increase_sensivity_warn_timer_move;
+	struct k_timer increase_sensivity_main_timer_move;
+	struct k_timer alarm_timer_move;
 };
 
 
