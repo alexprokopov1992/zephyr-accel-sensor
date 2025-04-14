@@ -12,12 +12,15 @@ enum accel_sensor_mode {
 
 enum accel_sensor_attrs {
     ACCEL_SENSOR_SPECIAL_ATTRS=64,
+	ACCEL_SENSOR_SPECIAL_ATTRS_MOVE,
 	ACCEL_SENSOR_CHAN_XYZ,
 };
 
 enum accel_sensor_trigger_types {
 	ACCEL_WARN_TRIGGER,
 	ACCEL_MAIN_TRIGGER,
+	ACCEL_WARN_TRIGGER_MOVE,
+	ACCEL_MAIN_TRIGGER_MOVE,
 };
 
 enum accel_sensor_channel {
@@ -25,6 +28,9 @@ enum accel_sensor_channel {
     ACCEL_SENSOR_CHANNEL_WARN_ZONE,
     ACCEL_SENSOR_CHANNEL_MAIN_ZONE,
     ACCEL_SENSOR_INCREASE_SENSIVITY_INTERVAL_SEC,
+	ACCEL_SENSOR_MODE_MOVE,
+	ACCEL_SENSOR_CHANNEL_WARN_ZONE_MOVE,
+	ACCEL_SENSOR_CHANNEL_MAIN_ZONE_MOVE,
 };
 
 struct accel_sensor_config {

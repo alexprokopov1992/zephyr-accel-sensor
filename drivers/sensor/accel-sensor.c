@@ -27,6 +27,10 @@ static float warn_zone_step_angle = 2.0/9.0;
 static float max_angle = 10.00;
 static const float cos_pow_0_5  = 0.999961923;
 
+static float warn_zone_accel_mult = 0.001;
+static float warn_zone_step_accel_mult_step = 0.001;
+static float main_zone_max_mult = 0.1;
+
 // Функція для обчислення довжини вектора
 float vector_length(_Vector3 v) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
@@ -131,55 +135,61 @@ static void adc_vbus_work_handler(struct k_work *work)
     float az = sensor_value_to_double(&val[2]);
     _Vector3 current_acc = {ax, ay, az};
     data->last_acc_tilt = current_acc;
-    // Обчислення загального кута нахилу
-    // float theta = angle_between_vectors(data->ref_acc, current_acc);
-    // printk("Загальний кут нахилу: %.3f градусів\n", theta * (180.0f / M_PI));
+	data->last_acc_move = current_acc;
 
-	if (data->mode_tilt != ACCEL_SENSOR_MODE_ARMED) {
+
+	if (data->mode_tilt != ACCEL_SENSOR_MODE_ARMED && data->mode_move != ACCEL_SENSOR_MODE_ARMED) {
 		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
 		return;
 	}
 
-	float pow_cos_theta = cospow2_between_vectors(data->ref_acc_tilt, current_acc);
-	if (pow_cos_theta == 0) {
-		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
-		return;
-	}
 
-	int64_t current_time = k_uptime_get();
-
-	if (pow_cos_theta < data->main_zone_cos_pow2[data->current_main_zone_tilt] && data->main_zone_active_tilt)
+	if (data->mode_tilt == ACCEL_SENSOR_MODE_ARMED)
 	{
-		if (!data->max_main_alert_level_tilt){
-			data->mode_tilt = ACCEL_SENSOR_MODE_ALARM;
-			data->in_warn_alert_tilt = true;
-			data->in_main_alert_tilt = true;
-			coarsering_tilt(data, 1);
-			data->last_trigger_time_main_tilt = current_time;
-			LOG_DBG("MAIN TRIGGER");
-			data->main_handler_tilt(dev, data->main_trigger_tilt);
-			k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+		float pow_cos_theta = cospow2_between_vectors(data->ref_acc_tilt, current_acc);
+		if (pow_cos_theta == 0) {
+			k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
+			return;
 		}
-		
-	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone_tilt] && data->warn_zone_active_tilt) {
-		if (!data->max_warn_alert_level_tilt) {
-			if (current_time - data->last_trigger_time_warn_tilt > MIN_WARN_INTERVAL) {
+
+		int64_t current_time = k_uptime_get();
+
+		if (pow_cos_theta < data->main_zone_cos_pow2[data->current_main_zone_tilt] && data->main_zone_active_tilt)
+		{
+			if (!data->max_main_alert_level_tilt){
+				data->mode_tilt = ACCEL_SENSOR_MODE_ALARM;
 				data->in_warn_alert_tilt = true;
-				coarsering_tilt(data, 0);
-				data->last_trigger_time_warn_tilt = current_time;
-				LOG_DBG("WARN TRIGGER");
-				data->warn_handler_tilt(dev, data->warn_trigger_tilt);
+				data->in_main_alert_tilt = true;
+				coarsering_tilt(data, 1);
+				data->last_trigger_time_main_tilt = current_time;
+				LOG_DBG("MAIN TRIGGER");
+				data->main_handler_tilt(dev, data->main_trigger_tilt);
 				k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 			}
-		}	
+			
+		} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone_tilt] && data->warn_zone_active_tilt) {
+			if (!data->max_warn_alert_level_tilt) {
+				if (current_time - data->last_trigger_time_warn_tilt > MIN_WARN_INTERVAL) {
+					data->in_warn_alert_tilt = true;
+					coarsering_tilt(data, 0);
+					data->last_trigger_time_warn_tilt = current_time;
+					LOG_DBG("WARN TRIGGER");
+					data->warn_handler_tilt(dev, data->warn_trigger_tilt);
+					k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+				}
+			}	
+		}
+		LOG_DBG(
+			"Current values: X:%.4f Y:%.4f Z:%.4f"
+			" pow cos theta: %.8f"
+			, (double)ax, (double)ay, (double)az
+			, (double)(pow_cos_theta)
+		);
 	}
 
-	LOG_DBG(
-		"Current values: X:%.4f Y:%.4f Z:%.4f"
-		" pow cos theta: %.8f"
-		, (double)ax, (double)ay, (double)az
-		, (double)(pow_cos_theta)
-	);
+	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED){
+
+	}
 
 	// TODO: Add callback
 	#if 0
