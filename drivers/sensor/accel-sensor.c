@@ -199,10 +199,12 @@ static void adc_vbus_work_handler(struct k_work *work)
 			data->last_acc_move.x = data->summary_acc_move.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
 			data->last_acc_move.y = data->summary_acc_move.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
 			data->last_acc_move.z = data->summary_acc_move.z / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			float accel = vector_length(data->last_acc_move);
 			data->summary_acc_move.x = 0;
 			data->summary_acc_move.y = 0;
 			data->summary_acc_move.z = 0;
 			data->samples_count_move = 0;
+			LOG_DBG("Move sensor value X:%10.3f Y:%10.3f Z:%10.3f a:%10.3f", (double)data->last_acc_move.x, (double)data->last_acc_move.y, (double)data->last_acc_move.z, (double)accel);
 		} else {
 			data->summary_acc_move.x += ax;
 			data->summary_acc_move.y += ay;
