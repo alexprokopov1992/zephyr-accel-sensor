@@ -32,9 +32,9 @@ static float warn_zone_step_angle = 2.0/9.0;
 static float max_angle = 10.00;
 static const float cos_pow_0_5  = 0.999961923;
 
-static float border_move = 0.001;
+static float border_move = 0.0005;
 
-static float warn_zone_accel_mult = 0.002;
+static float warn_zone_accel_mult = 0.001;
 static float warn_zone_step_accel_mult_step = 0.001;
 static float main_zone_max_mult = 0.1;
 
@@ -218,9 +218,9 @@ static void adc_vbus_work_handler(struct k_work *work)
 			data->summary_acc_move.z = 0;
 			data->samples_count_move = 0;
 
-			float acc_len = vector_length(data->last_acc_move);
 			if (data->mode_move == ACCEL_SENSOR_MODE_ARMED)
 			{
+				float acc_len = vector_length(data->last_acc_move);
 				_Vector3 accelerate = {data->last_acc_move.x - data->ref_acc_move.x, data->last_acc_move.y - data->ref_acc_move.y, data->last_acc_move.z - data->ref_acc_move.z};
 				float accel = vector_length(accelerate);
 				if (data->gravity > 0)
@@ -230,6 +230,8 @@ static void adc_vbus_work_handler(struct k_work *work)
 					{
 						data->in_warn_alert_move = false;
 						data->in_main_alert_move = false;
+						data->gravity = acc_len;
+						data->ref_acc_move = data->last_acc_move;
 					} else {
 						if (accel > data->main_zone_move[data->current_main_zone_move] && data->main_zone_active_move)
 						{
