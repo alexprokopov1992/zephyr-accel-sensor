@@ -16,7 +16,8 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 #define M_PIf 3.1415927f
 #endif
 
-#define MOVE_SENSOR_SAMPLE_TIME 200
+#define MOVE_SENSOR_SAMPLE_TIME 100
+#define MOVE_SENSOR_SAMPLE_COUNT 5
 #define ACCEL_SENSOR_SAMPLE_TIME 1000
 
 #define REFRESH_POS_TIME 3600
@@ -31,9 +32,9 @@ static float warn_zone_step_angle = 2.0/9.0;
 static float max_angle = 10.00;
 static const float cos_pow_0_5  = 0.999961923;
 
-static float border_move = 0.0005;
+static float border_move = 0.001;
 
-static float warn_zone_accel_mult = 0.001;
+static float warn_zone_accel_mult = 0.002;
 static float warn_zone_step_accel_mult_step = 0.001;
 static float main_zone_max_mult = 0.1;
 
@@ -141,7 +142,7 @@ static void adc_vbus_work_handler(struct k_work *work)
     float az = sensor_value_to_double(&val[2]);
     _Vector3 current_acc = {ax, ay, az};
     data->last_acc_tilt = current_acc;
-	data->last_acc_move = current_acc;
+	// data->last_acc_move = current_acc;
 
 
 	if (data->mode_tilt != ACCEL_SENSOR_MODE_ARMED && data->mode_move != ACCEL_SENSOR_MODE_ARMED) {
@@ -194,7 +195,20 @@ static void adc_vbus_work_handler(struct k_work *work)
 	}
 
 	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED){
-
+		if (data->samples_count_move == MOVE_SENSOR_SAMPLE_COUNT){
+			data->last_acc_move.x = data->summary_acc_move.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->last_acc_move.y = data->summary_acc_move.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->last_acc_move.z = data->summary_acc_move.z / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->summary_acc_move.x = 0;
+			data->summary_acc_move.y = 0;
+			data->summary_acc_move.z = 0;
+			data->samples_count_move = 0;
+		} else {
+			data->summary_acc_move.x += ax;
+			data->summary_acc_move.y += ay;
+			data->summary_acc_move.z += az;
+			data->samples_count_move++;
+		}
 	}
 
 	// TODO: Add callback
@@ -553,6 +567,10 @@ static int init(const struct device *dev)
 	k_timer_init(&data->refresh_current_pos_timer_move, refresh_current_pos_timer_handler_move, NULL);
 	k_timer_init(&data->increase_sensivity_timer_move, increase_sensivity_timer_handler_move, NULL);
 	k_timer_init(&data->alarm_timer_move, alarm_timer_handler_move, NULL);
+	data->samples_count_move = 0;
+	data->summary_acc_move.x = 0;
+	data->summary_acc_move.y = 0;
+	data->summary_acc_move.z = 0;
 	// TODO: Напевно треба перенести в макрос визначення змінної
 	k_work_init_delayable(&data->dwork, adc_vbus_work_handler);
 	k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
@@ -721,6 +739,10 @@ static int _attr_set(const struct device *dev,
 						data->ref_acc_move.x = 0;
 						data->ref_acc_move.y = 0;
 						data->ref_acc_move.z = 0;
+						data->samples_count_move = 0;
+						data->summary_acc_move.x = 0;
+						data->summary_acc_move.y = 0;
+						data->summary_acc_move.z = 0;
 						k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(ARMING_DELAY_SEC), K_NO_WAIT);
 						k_timer_stop(&data->increase_sensivity_timer_move);
 						k_timer_stop(&data->alarm_timer_move);
