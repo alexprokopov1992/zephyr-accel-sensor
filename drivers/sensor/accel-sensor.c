@@ -209,9 +209,8 @@ static void adc_vbus_work_handler(struct k_work *work)
 				data->last_trigger_time_main_tilt = current_time;
 				LOG_DBG("MAIN TRIGGER TILT");
 				data->main_handler_tilt(dev, data->main_trigger_tilt);
-				k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 			}
-			
+			k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 		} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone_tilt] && data->warn_zone_active_tilt) {
 			if (!data->max_warn_alert_level_tilt) {
 				if (current_time - data->last_trigger_time_warn_tilt > MIN_WARN_INTERVAL) {
@@ -220,16 +219,16 @@ static void adc_vbus_work_handler(struct k_work *work)
 					data->last_trigger_time_warn_tilt = current_time;
 					LOG_DBG("WARN TRIGGER TILT");
 					data->warn_handler_tilt(dev, data->warn_trigger_tilt);
-					k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 				}
+				k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 			}	
 		}
-		LOG_DBG(
-			"Current values: X:%.4f Y:%.4f Z:%.4f"
-			" pow cos theta: %.8f"
-			, (double)ax, (double)ay, (double)az
-			, (double)(pow_cos_theta)
-		);
+		// LOG_DBG(
+		// 	"Current values: X:%.4f Y:%.4f Z:%.4f"
+		// 	" pow cos theta: %.8f"
+		// 	, (double)ax, (double)ay, (double)az
+		// 	, (double)(pow_cos_theta)
+		// );
 	}
 
 	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED || data->mode_move == ACCEL_SENSOR_MODE_ALARM){
