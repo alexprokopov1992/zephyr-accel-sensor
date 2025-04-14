@@ -101,7 +101,8 @@ struct accel_sensor_data {
 	int64_t last_trigger_time_warn_move;
     int64_t last_trigger_time_main_move;
 	struct k_timer refresh_current_pos_timer_move;
-	struct k_timer increase_sensivity_timer_move;
+	struct k_timer increase_sensivity_warn_timer_move;
+	struct k_timer increase_sensivity_main_timer_move;
 	struct k_timer alarm_timer_move;
 };
 
