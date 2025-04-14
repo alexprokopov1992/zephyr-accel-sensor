@@ -9,8 +9,8 @@
 #include "accel-sensor.h"
 #include <math.h>
 
-// LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
-LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
+// LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 
 #if !defined(M_PIf)
 #define M_PIf 3.1415927f
@@ -229,6 +229,27 @@ static void init_warn_zones_tilt(const struct device *dev)
 	}
 }
 
+static void refresh_warn_zones_move(struct accel_sensor_data *data)
+{
+	float current_accel = vector_length(data->ref_acc_move);
+	for (int i = 0; i < 10; i++)
+	{
+		data->warn_zone_move[i] = current_accel * (warn_zone_accel_mult + warn_zone_step_accel_mult_step * i);
+	}
+	
+}
+
+static void refresh_main_zones_move(struct accel_sensor_data *data, int warn_zone)
+{
+	float current_accel = vector_length(data->ref_acc_move);
+	float start_mult = warn_zone_step_accel_mult_step * (warn_zone + 2);
+	float step = (main_zone_max_mult - start_mult) / (float)9.0;
+	for (int i = 0; i < 10; i++)
+	{
+		data->main_zone_move[i] = current_accel * (start_mult + step * i);
+	}
+}
+
 static void create_main_zones_tilt(const struct device *dev, int warn_zone)
 {
 	struct accel_sensor_data *data = dev->data;
@@ -311,9 +332,21 @@ static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 	{
 		if (!data->in_warn_alert_move && !data->in_main_alert_move)
 		{
-			//додати умову
-			data->ref_acc_move = data->last_acc_move;
-			LOG_DBG("ref_acc_move Refreshed");
+			if (data->ref_acc_move.x == 0 && data->ref_acc_move.y == 0 && data->ref_acc_move.z == 0)
+			{
+				data->ref_acc_move = data->last_acc_move;
+				refresh_warn_zones_move(data);
+				for (int i = 0; i < 10; i++)
+				{
+					LOG_DBG("Warn zone move[%d]: %f", i, data->warn_zone_move[i]);
+				}
+				refresh_main_zones_move(data, data->selected_warn_zone_move);
+				for (int i = 0; i < 10; i++)
+				{
+					LOG_DBG("Main zone move[%d]: %f", i, data->main_zone_move[i]);
+				}
+				LOG_DBG("ref_acc_move Refreshed");
+			}
 		}
 	} else {
 		k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(5), K_NO_WAIT);
@@ -535,6 +568,14 @@ static int _trigger_set(const struct device *dev,
 			data->main_handler_tilt = handler;
 			data->main_trigger_tilt = trig;
 			break;
+		case ACCEL_WARN_TRIGGER_MOVE:
+			data->warn_handler_move = handler;
+			data->warn_trigger_move = trig;
+			break;
+		case ACCEL_MAIN_TRIGGER_MOVE:
+			data->main_handler_move = handler;
+			data->main_trigger_move = trig;
+			break;
         default:
             return -ENOTSUP;
 	}
@@ -615,6 +656,82 @@ static int _attr_set(const struct device *dev,
 					case (ACCEL_SENSOR_MODE_ALARM_STOP):
 						k_timer_start(&data->alarm_timer_tilt, K_MSEC(STOP_ACCEL_ALARM_INTERVAL), K_NO_WAIT);
 						LOG_INF("Alarm mode stoped in %d ms", STOP_ACCEL_ALARM_INTERVAL);
+						return 0;
+					default:
+						return -ENOTSUP;
+				}
+			case (ACCEL_SENSOR_MODE_ALARM_STOP):
+				return 0;
+			default:
+				return -ENOTSUP;
+		}
+		
+    }
+
+	if (chan == (enum sensor_channel)ACCEL_SENSOR_MODE_MOVE) {
+		
+		switch (data->mode_move) {
+			case (ACCEL_SENSOR_MODE_ARMED):
+				switch (val1) {
+					case (ACCEL_SENSOR_MODE_ARMED):
+						return 0;
+					case (ACCEL_SENSOR_MODE_DISARMED):
+						LOG_DBG("ACCEL_SENSOR_MODE_DISARMED_MOVE");
+						data->mode_move = val1;
+						k_timer_stop(&data->alarm_timer_move);
+						k_timer_stop(&data->refresh_current_pos_timer_move);
+						k_timer_stop(&data->increase_sensivity_timer_move);
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM):
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM_STOP):
+						return 0;
+					default:
+						return -ENOTSUP;
+				}
+			case (ACCEL_SENSOR_MODE_DISARMED):
+				switch (val1) {
+					case (ACCEL_SENSOR_MODE_ARMED):
+						LOG_DBG("ACCEL_SENSOR_MODE_ARMED_MOVE");
+						data->current_main_zone_move = data->selected_main_zone_move;
+						data->current_warn_zone_move = data->selected_warn_zone_move;
+						data->in_warn_alert_move = false;
+						data->in_main_alert_move = false;
+						data->max_warn_alert_level_move = false;
+						data->max_main_alert_level_move = false;
+						data->mode_move = ACCEL_SENSOR_MODE_ARMED;
+						data->ref_acc_move.x = 0;
+						data->ref_acc_move.y = 0;
+						data->ref_acc_move.z = 0;
+						k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(ARMING_DELAY_SEC), K_NO_WAIT);
+						k_timer_stop(&data->increase_sensivity_timer_move);
+						k_timer_stop(&data->alarm_timer_move);
+						return 0;
+					case (ACCEL_SENSOR_MODE_DISARMED):
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM):
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM_STOP):
+						return 0;
+					default:
+						return -ENOTSUP;
+				}
+			case (ACCEL_SENSOR_MODE_ALARM):
+				switch (val1) {
+					case (ACCEL_SENSOR_MODE_ARMED):
+						return 0;
+					case (ACCEL_SENSOR_MODE_DISARMED):
+						LOG_DBG("ACCEL_SENSOR_MODE_DISARMED_MOVE");
+						data->mode_move = val1;
+						k_timer_stop(&data->alarm_timer_move);
+						k_timer_stop(&data->refresh_current_pos_timer_move);
+						k_timer_stop(&data->increase_sensivity_timer_move);
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM):
+						return 0;
+					case (ACCEL_SENSOR_MODE_ALARM_STOP):
+						k_timer_start(&data->alarm_timer_move, K_MSEC(STOP_ACCEL_ALARM_INTERVAL), K_NO_WAIT);
+						LOG_INF("MOVE Alarm mode stoped in %d ms", STOP_ACCEL_ALARM_INTERVAL);
 						return 0;
 					default:
 						return -ENOTSUP;
