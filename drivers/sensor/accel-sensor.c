@@ -361,10 +361,10 @@ static void refresh_current_pos_timer_handler_tilt(struct k_timer *timer)
 
 static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 {
-	LOG_DBG("Refreshing ref_acc_move");
     struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, refresh_current_pos_timer_move);
 	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED)
 	{
+		LOG_DBG("Refreshing ref_acc_move");
 		if (!data->in_warn_alert_move && !data->in_main_alert_move)
 		{
 			float accel = vector_length(data->last_acc_move);
