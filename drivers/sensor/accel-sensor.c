@@ -9,8 +9,8 @@
 #include "accel-sensor.h"
 #include <math.h>
 
-LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
-// LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
+// LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 
 #if !defined(M_PIf)
 #define M_PIf 3.1415927f
