@@ -206,7 +206,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 		);
 	}
 
-	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED){
+	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED || data->mode_move == ACCEL_SENSOR_MODE_ALARM){
 
 		int64_t current_time = k_uptime_get();
 		if (data->samples_count_move >= MOVE_SENSOR_SAMPLE_COUNT){
@@ -217,36 +217,51 @@ static void adc_vbus_work_handler(struct k_work *work)
 			data->summary_acc_move.y = 0;
 			data->summary_acc_move.z = 0;
 			data->samples_count_move = 0;
-			_Vector3 accelerate = {data->last_acc_move.x - data->ref_acc_move.x, data->last_acc_move.y - data->ref_acc_move.y, data->last_acc_move.z - data->ref_acc_move.z};
-			float accel = vector_length(accelerate);
-			if (accel > data->main_zone_move[data->current_main_zone_move] && data->main_zone_active_move)
+
+			float acc_len = vector_length(data->last_acc_move);
+			if (data->mode_move == ACCEL_SENSOR_MODE_ARMED)
 			{
-				if (!data->max_main_alert_level_move){
-					data->mode_move = ACCEL_SENSOR_MODE_ALARM;
-					data->in_warn_alert_move = true;
-					data->in_main_alert_move = true;
-					//загрублення
-					LOG_DBG("Move Main zone move triggered");
-					data->last_trigger_time_main_move = current_time;
-					data->main_handler_move(dev, data->main_trigger_move);
-					k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
-				}
-			} else {
-				if (accel > data->warn_zone_move[data->current_warn_zone_move] && data->warn_zone_active_move) {
-					if (!data->max_warn_alert_level_move) {
-						if (current_time - data->last_trigger_time_warn_move > MIN_WARN_INTERVAL) {
-							data->in_warn_alert_move = true;
-							//загрублення
-							LOG_DBG("Move Warn zone move triggered");
-							data->last_trigger_time_warn_move = current_time;
-							data->warn_handler_move(dev, data->warn_trigger_move);
-							k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+				_Vector3 accelerate = {data->last_acc_move.x - data->ref_acc_move.x, data->last_acc_move.y - data->ref_acc_move.y, data->last_acc_move.z - data->ref_acc_move.z};
+				float accel = vector_length(accelerate);
+				if (data->gravity > 0)
+				{
+					float change = (data->gravity - acc_len)/data->gravity;
+					if (change < border_move && change > -border_move)
+					{
+						data->in_warn_alert_move = false;
+						data->in_main_alert_move = false;
+					} else {
+						if (accel > data->main_zone_move[data->current_main_zone_move] && data->main_zone_active_move)
+						{
+							if (!data->max_main_alert_level_move){
+								data->mode_move = ACCEL_SENSOR_MODE_ALARM;
+								data->in_warn_alert_move = true;
+								data->in_main_alert_move = true;
+								//загрублення
+								LOG_DBG("Move Main zone move triggered");
+								data->last_trigger_time_main_move = current_time;
+								data->main_handler_move(dev, data->main_trigger_move);
+								k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+							}
+						} else {
+							if (accel > data->warn_zone_move[data->current_warn_zone_move] && data->warn_zone_active_move) {
+								if (!data->max_warn_alert_level_move) {
+									if (current_time - data->last_trigger_time_warn_move > MIN_WARN_INTERVAL) {
+										data->in_warn_alert_move = true;
+										//загрублення
+										LOG_DBG("Move Warn zone move triggered");
+										data->last_trigger_time_warn_move = current_time;
+										data->warn_handler_move(dev, data->warn_trigger_move);
+										k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+									}
+								}
+							}
 						}
 					}
-				}
-			}
 
-			LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f", (double)data->last_acc_move.x, (double)data->last_acc_move.y, (double)data->last_acc_move.z, (double)accel);
+					LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f gravity: %10.6f last_acc: %10.6f", (double)data->last_acc_move.x, (double)data->last_acc_move.y, (double)data->last_acc_move.z, (double)accel, (double)data->gravity, (double)acc_len);
+				}
+			}	
 		} else {
 			data->summary_acc_move.x += ax;
 			data->summary_acc_move.y += ay;
@@ -787,6 +802,7 @@ static int _attr_set(const struct device *dev,
 						data->summary_acc_move.x = 0;
 						data->summary_acc_move.y = 0;
 						data->summary_acc_move.z = 0;
+						data->gravity = 0;
 						k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(ARMING_DELAY_SEC), K_NO_WAIT);
 						k_timer_stop(&data->increase_sensivity_timer_move);
 						k_timer_stop(&data->alarm_timer_move);
@@ -902,6 +918,7 @@ static int _attr_set(const struct device *dev,
 			data->ref_acc_move.x = 0;
 			data->ref_acc_move.y = 0;
 			data->ref_acc_move.z = 0;
+			data->gravity = 0;
 			k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(2), K_NO_WAIT);
 			LOG_DBG("WARN_ZONE_MOVE disabled");
 			return 0;
@@ -919,6 +936,7 @@ static int _attr_set(const struct device *dev,
 		data->ref_acc_move.x = 0;
 		data->ref_acc_move.y = 0;
 		data->ref_acc_move.z = 0;
+		data->gravity = 0;
 		k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(2), K_NO_WAIT);
 		return 0;
 	}
@@ -932,6 +950,7 @@ static int _attr_set(const struct device *dev,
 			data->ref_acc_move.x = 0;
 			data->ref_acc_move.y = 0;
 			data->ref_acc_move.z = 0;
+			data->gravity = 0;
 			k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(2), K_NO_WAIT);
 			LOG_DBG("MAIN_ZONE_MOVE disabled");
 			return 0;
@@ -950,6 +969,7 @@ static int _attr_set(const struct device *dev,
 		data->ref_acc_move.x = 0;
 		data->ref_acc_move.y = 0;
 		data->ref_acc_move.z = 0;
+		data->gravity = 0;
 		k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(2), K_NO_WAIT);
 		return 0;
 	}
