@@ -336,15 +336,15 @@ static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 			{
 				data->ref_acc_move = data->last_acc_move;
 				refresh_warn_zones_move(data);
-				for (int i = 0; i < 10; i++)
-				{
-					LOG_DBG("Warn zone move[%d]: %f", i, data->warn_zone_move[i]);
-				}
+				// for (int i = 0; i < 10; i++)
+				// {
+				// 	LOG_DBG("Warn zone move[%d]: %f", i, data->warn_zone_move[i]);
+				// }
 				refresh_main_zones_move(data, data->selected_warn_zone_move);
-				for (int i = 0; i < 10; i++)
-				{
-					LOG_DBG("Main zone move[%d]: %f", i, data->main_zone_move[i]);
-				}
+				// for (int i = 0; i < 10; i++)
+				// {
+				// 	LOG_DBG("Main zone move[%d]: %f", i, data->main_zone_move[i]);
+				// }
 				LOG_DBG("ref_acc_move Refreshed");
 			}
 		}
@@ -534,6 +534,10 @@ static int init(const struct device *dev)
 	data->warn_zone_active_move = true;
 	data->main_zone_active_move = true;
 	data->mode_move = ACCEL_SENSOR_MODE_DISARMED;
+	data->selected_warn_zone_move = 5;
+	data->current_warn_zone_move = 5;
+	data->selected_main_zone_move = 5;
+	data->current_main_zone_move = 5;
 	k_timer_init(&data->refresh_current_pos_timer_move, refresh_current_pos_timer_handler_move, NULL);
 	k_timer_init(&data->increase_sensivity_timer_move, increase_sensivity_timer_handler_move, NULL);
 	k_timer_init(&data->alarm_timer_move, alarm_timer_handler_move, NULL);
@@ -757,7 +761,6 @@ static int _attr_set(const struct device *dev,
 			data->ref_acc_tilt.y = 0;
 			data->ref_acc_tilt.z = 0;
 			k_timer_start(&data->refresh_current_pos_timer_tilt, K_SECONDS(2), K_NO_WAIT);
-			// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 			LOG_DBG("WARN_ZONE disabled");
 			return 0;
 		}
@@ -774,8 +777,6 @@ static int _attr_set(const struct device *dev,
 		data->ref_acc_tilt.y = 0;
 		data->ref_acc_tilt.z = 0;
 		k_timer_start(&data->refresh_current_pos_timer_tilt, K_SECONDS(2), K_NO_WAIT);
-		// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
-		// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
 		return 0;
 	}
 
@@ -788,7 +789,6 @@ static int _attr_set(const struct device *dev,
 			data->ref_acc_tilt.y = 0;
 			data->ref_acc_tilt.z = 0;
 			k_timer_start(&data->refresh_current_pos_timer_tilt, K_SECONDS(2), K_NO_WAIT);
-			// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
 			LOG_DBG("MAIN_ZONE disabled");
 			return 0;
 		}
@@ -805,8 +805,71 @@ static int _attr_set(const struct device *dev,
 		data->ref_acc_tilt.y = 0;
 		data->ref_acc_tilt.z = 0;
 		k_timer_start(&data->refresh_current_pos_timer_tilt, K_SECONDS(2), K_NO_WAIT);
-		// k_timer_start(&data->refresh_current_pos_timer, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
-		// k_timer_start(&data->refresh_current_pos_timer, K_MSEC(100), K_NO_WAIT);
+		return 0;
+	}
+
+	///////////////////////////
+
+	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_WARN_ZONE_MOVE) {
+		if (val1 == 0){
+			k_timer_stop(&data->increase_sensivity_timer_move);
+			data->warn_zone_active_move = false;
+			data->selected_warn_zone_move = 9;
+			data->current_warn_zone_move = data->selected_warn_zone_move;
+			data->current_main_zone_move = data->selected_main_zone_move;
+			LOG_DBG("set MOVE warn zone to %d, set main zone to %d", data->current_warn_zone_move, data->current_main_zone_move);
+			data->ref_acc_move.x = 0;
+			data->ref_acc_move.y = 0;
+			data->ref_acc_move.z = 0;
+			k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(2), K_NO_WAIT);
+			LOG_DBG("WARN_ZONE_MOVE disabled");
+			return 0;
+		}
+		val1 /= 10;
+		LOG_DBG("Set MOVE warn zone to %d", 10 - val1);
+		k_timer_stop(&data->increase_sensivity_timer_move);
+		data->selected_warn_zone_move = 10 - val1;
+		data->current_main_zone_move = data->selected_main_zone_move;
+		data->in_warn_alert_move = false;
+		data->in_main_alert_move = false;
+		data->max_warn_alert_level_move = false;
+		data->max_main_alert_level_move = false;
+		data->warn_zone_active_move = true;
+		data->ref_acc_move.x = 0;
+		data->ref_acc_move.y = 0;
+		data->ref_acc_move.z = 0;
+		k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(2), K_NO_WAIT);
+		return 0;
+	}
+
+	if (chan == (enum sensor_channel)ACCEL_SENSOR_CHANNEL_MAIN_ZONE_MOVE) {
+		if (val1 == 0){
+			k_timer_stop(&data->increase_sensivity_timer_move);
+			data->main_zone_active_move = false;
+			data->current_main_zone_move = data->selected_main_zone_move;
+			data->current_warn_zone_move = data->selected_warn_zone_move;
+			data->ref_acc_move.x = 0;
+			data->ref_acc_move.y = 0;
+			data->ref_acc_move.z = 0;
+			k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(2), K_NO_WAIT);
+			LOG_DBG("MAIN_ZONE_MOVE disabled");
+			return 0;
+		}
+		val1 /= 10;
+		LOG_DBG("Set MOVE main zone to %d", 10 - val1);
+		k_timer_stop(&data->increase_sensivity_timer_move);
+		data->selected_main_zone_move = 10 - val1;
+		data->current_main_zone_move = data->selected_main_zone_move;
+		data->current_warn_zone_move = data->selected_warn_zone_move;
+		data->in_warn_alert_move = false;
+		data->in_main_alert_move = false;
+		data->max_warn_alert_level_move = false;
+		data->max_main_alert_level_move = false;
+		data->main_zone_active_move = true;
+		data->ref_acc_move.x = 0;
+		data->ref_acc_move.y = 0;
+		data->ref_acc_move.z = 0;
+		k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(2), K_NO_WAIT);
 		return 0;
 	}
 

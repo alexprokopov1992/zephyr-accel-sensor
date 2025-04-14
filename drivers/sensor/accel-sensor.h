@@ -12,7 +12,6 @@ enum accel_sensor_mode {
 
 enum accel_sensor_attrs {
     ACCEL_SENSOR_SPECIAL_ATTRS=64,
-	ACCEL_SENSOR_SPECIAL_ATTRS_MOVE,
 	ACCEL_SENSOR_CHAN_XYZ,
 };
 
