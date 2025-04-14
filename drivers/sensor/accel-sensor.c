@@ -16,10 +16,11 @@ LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 #define M_PIf 3.1415927f
 #endif
 
-#define MOVE_SENSOR_SAMPLE_TIME 100
+#define MOVE_SENSOR_SAMPLE_TIME 200
 #define ACCEL_SENSOR_SAMPLE_TIME 1000
 
 #define REFRESH_POS_TIME 3600
+#define REFRESH_POS_TIME_MOVE 10
 #define INCREASE_SENSIVITY_TIME 10
 #define ARMING_DELAY_SEC 10
 #define MIN_WARN_INTERVAL 2000 // ms
@@ -354,14 +355,16 @@ static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 					refresh_warn_zones_move(data);
 					refresh_main_zones_move(data, data->selected_warn_zone_move);
 					LOG_DBG("ref_acc_move Refreshed Gravity change %.6f", (double)data->gravity);
-				}
-			}
+				} else {
+					LOG_DBG("Move Too big difference %.6f", (double)accel);
+				} 
+			} 
 		}
 	} else {
 		k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(5), K_NO_WAIT);
 		return;
 	}
-	k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(REFRESH_POS_TIME), K_NO_WAIT);
+	k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(REFRESH_POS_TIME_MOVE), K_NO_WAIT);
 }
 
 static void alarm_timer_handler_tilt(struct k_timer *timer)
