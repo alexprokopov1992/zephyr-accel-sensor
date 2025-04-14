@@ -128,6 +128,32 @@ static void coarsering_tilt(struct accel_sensor_data *data, int level)
 	}
 }
 
+static void coarsering_move(struct accel_sensor_data *data, int level)
+{
+	if (level == 0)
+	{
+		if (data->current_warn_zone_move == 9){
+			data->max_warn_alert_level_move = true;
+			LOG_DBG("Max MOVE warn level reached %d", data->current_warn_zone_move);
+		} else if (data->warn_zone_move[data->current_warn_zone_move+1] > data->main_zone_move[data->selected_main_zone_move])
+		{
+			data->max_warn_alert_level_move = true;
+			LOG_DBG("Max MOVE warn level reached %d", data->current_warn_zone_move);
+		} else {
+			data->current_warn_zone_move++;
+			LOG_DBG("Coarsering WARN_ZONE_MOVE to %d", data->current_warn_zone_move);
+		}
+	} else {
+		if (data->current_main_zone_move == 9){
+			data->max_main_alert_level_move = true;
+			LOG_DBG("Max MOVE main level reached %d", data->current_main_zone_move);
+		} else {
+			data->current_main_zone_move += 1;
+			LOG_DBG("Coarsering MAIN_ZONE_MOVE to %d", data->current_main_zone_move);
+		}
+	}
+}
+
 static void adc_vbus_work_handler(struct k_work *work)
 {
     struct k_work_delayable *delayable = k_work_delayable_from_work(work);
@@ -228,8 +254,6 @@ static void adc_vbus_work_handler(struct k_work *work)
 					float change = (data->gravity - acc_len)/data->gravity;
 					if (change < border_move && change > -border_move)
 					{
-						data->in_warn_alert_move = false;
-						data->in_main_alert_move = false;
 						data->gravity = acc_len;
 						data->ref_acc_move = data->last_acc_move;
 					} else {
@@ -237,9 +261,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 						{
 							if (!data->max_main_alert_level_move){
 								data->mode_move = ACCEL_SENSOR_MODE_ALARM;
-								data->in_warn_alert_move = true;
-								data->in_main_alert_move = true;
-								//загрублення
+								coarsering_move(data, 1);
 								LOG_DBG("Move Main zone move triggered");
 								data->last_trigger_time_main_move = current_time;
 								data->main_handler_move(dev, data->main_trigger_move);
@@ -249,8 +271,7 @@ static void adc_vbus_work_handler(struct k_work *work)
 							if (accel > data->warn_zone_move[data->current_warn_zone_move]*data->gravity && data->warn_zone_active_move) {
 								if (!data->max_warn_alert_level_move) {
 									if (current_time - data->last_trigger_time_warn_move > MIN_WARN_INTERVAL) {
-										data->in_warn_alert_move = true;
-										//загрублення
+										coarsering_move(data, 0);
 										LOG_DBG("Move Warn zone move triggered");
 										data->last_trigger_time_warn_move = current_time;
 										data->warn_handler_move(dev, data->warn_trigger_move);
@@ -411,35 +432,30 @@ static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED)
 	{
 		LOG_DBG("Refreshing ref_acc_move");
-		if (!data->in_warn_alert_move && !data->in_main_alert_move)
+		float accel = vector_length(data->last_acc_move);
+		if (data->ref_acc_move.x == 0 && data->ref_acc_move.y == 0 && data->ref_acc_move.z == 0)
 		{
-			float accel = vector_length(data->last_acc_move);
-			if (data->ref_acc_move.x == 0 && data->ref_acc_move.y == 0 && data->ref_acc_move.z == 0)
+			data->gravity = accel;
+			data->ref_acc_move = data->last_acc_move;
+			LOG_DBG("ref_acc_move Refreshed Init %.6f", (double)data->gravity);
+		} else {
+			float change = (data->gravity - accel)/data->gravity;
+			if ( change < border_move && change > -border_move)
 			{
 				data->gravity = accel;
 				data->ref_acc_move = data->last_acc_move;
-				// refresh_warn_zones_move(data);
-				// refresh_main_zones_move(data, data->selected_warn_zone_move);
-				LOG_DBG("ref_acc_move Refreshed Init %.6f", (double)data->gravity);
+				LOG_DBG("ref_acc_move Refreshed Gravity change %.6f", (double)data->gravity);
 			} else {
-				float change = (data->gravity - accel)/data->gravity;
-				if ( change < border_move && change > -border_move)
-				{
-					data->gravity = accel;
-					data->ref_acc_move = data->last_acc_move;
-					// refresh_warn_zones_move(data);
-					// refresh_main_zones_move(data, data->selected_warn_zone_move);
-					LOG_DBG("ref_acc_move Refreshed Gravity change %.6f", (double)data->gravity);
-				} else {
-					LOG_DBG("Move Too big difference %.6f", (double)accel);
-				} 
+				LOG_DBG("Move Too big difference %.6f", (double)accel);
+				k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(5), K_NO_WAIT);
+				return;
 			} 
-		}
+		} 
+
 	} else {
 		k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(5), K_NO_WAIT);
 		return;
 	}
-	// k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(REFRESH_POS_TIME_MOVE), K_NO_WAIT);
 }
 
 static void alarm_timer_handler_tilt(struct k_timer *timer)
@@ -551,16 +567,16 @@ static void increase_sensivity_timer_handler_move(struct k_timer *timer)
 	} 
 
 	if (data->current_warn_zone_move == data->selected_warn_zone_move) {
-		data->in_warn_alert_move = false;
+		
 	}
 
-	if (data->current_main_zone_move == data->selected_main_zone_move) {
-		data->in_main_alert_move = false;
-	}
+	// if (data->current_main_zone_move == data->selected_main_zone_move) {
+	// 	data->in_main_alert_move = false;
+	// }
 
-	if (data->in_warn_alert_move || data->in_main_alert_move) {
-		k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
-	}
+	// if (data->in_warn_alert_move || data->in_main_alert_move) {
+	// 	k_timer_start(&data->increase_sensivity_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+	// }
 }
 
 static int init(const struct device *dev)
@@ -616,8 +632,6 @@ static int init(const struct device *dev)
 	//переміщення
 	create_warn_zones_move(dev);
 	create_main_zones_move(dev, data->selected_warn_zone_move);
-	data->in_warn_alert_move = false;
-	data->in_main_alert_move = false;
 	data->max_warn_alert_level_move = false;
 	data->max_main_alert_level_move = false;
 	data->warn_zone_active_move = true;
@@ -794,8 +808,6 @@ static int _attr_set(const struct device *dev,
 						data->sampling_period_ms = MOVE_SENSOR_SAMPLE_TIME;
 						data->current_main_zone_move = data->selected_main_zone_move;
 						data->current_warn_zone_move = data->selected_warn_zone_move;
-						data->in_warn_alert_move = false;
-						data->in_main_alert_move = false;
 						data->max_warn_alert_level_move = false;
 						data->max_main_alert_level_move = false;
 						data->mode_move = ACCEL_SENSOR_MODE_ARMED;
@@ -935,8 +947,6 @@ static int _attr_set(const struct device *dev,
 		data->current_warn_zone_move = data->selected_warn_zone_move;
 		create_main_zones_move(dev, data->selected_warn_zone_move);
 		data->current_main_zone_move = data->selected_main_zone_move;
-		data->in_warn_alert_move = false;
-		data->in_main_alert_move = false;
 		data->max_warn_alert_level_move = false;
 		data->max_main_alert_level_move = false;
 		data->warn_zone_active_move = true;
@@ -968,8 +978,6 @@ static int _attr_set(const struct device *dev,
 		data->selected_main_zone_move = 10 - val1;
 		data->current_main_zone_move = data->selected_main_zone_move;
 		data->current_warn_zone_move = data->selected_warn_zone_move;
-		data->in_warn_alert_move = false;
-		data->in_main_alert_move = false;
 		data->max_warn_alert_level_move = false;
 		data->max_main_alert_level_move = false;
 		data->main_zone_active_move = true;

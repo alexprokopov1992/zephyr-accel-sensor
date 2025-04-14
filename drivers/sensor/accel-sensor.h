@@ -88,8 +88,6 @@ struct accel_sensor_data {
 	int selected_main_zone_move;
 	int current_main_zone_move;
 	int mode_move;
-	bool in_warn_alert_move;
-	bool in_main_alert_move;
 	bool max_warn_alert_level_move;
 	bool max_main_alert_level_move;
 	bool warn_zone_active_move;
