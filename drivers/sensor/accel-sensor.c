@@ -158,6 +158,12 @@ static void adc_vbus_work_handler(struct k_work *work)
 {
     struct k_work_delayable *delayable = k_work_delayable_from_work(work);
     struct accel_sensor_data *data = CONTAINER_OF(delayable, struct accel_sensor_data, dwork);
+
+	if (data->mode_tilt == ACCEL_SENSOR_MODE_DISARMED && data->mode_move == ACCEL_SENSOR_MODE_DISARMED) {
+		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
+		return;
+	}
+
 	const struct device *dev = data->accel_dev;
 
 	struct sensor_value val[3];
@@ -169,12 +175,6 @@ static void adc_vbus_work_handler(struct k_work *work)
     _Vector3 current_acc = {ax, ay, az};
     data->last_acc_tilt = current_acc;
 	// data->last_acc_move = current_acc;
-
-
-	if (data->mode_tilt != ACCEL_SENSOR_MODE_ARMED && data->mode_move != ACCEL_SENSOR_MODE_ARMED) {
-		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
-		return;
-	}
 
 	bool allowed = false;
 	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED) {
