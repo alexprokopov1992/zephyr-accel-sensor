@@ -2,6 +2,17 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
+#include <zephyr/drivers/i2c.h>
+
+#define MMA8652_ADDR 0x1D
+#define CTRL_REG1      0x2A
+#define FF_MT_CFG      0x15
+#define FF_MT_THS      0x17
+#define FF_MT_COUNT    0x18
+#define CTRL_REG4      0x2D
+#define CTRL_REG5      0x2E
+#define F_SETUP        0x09
+
 
 enum accel_sensor_mode {
     ACCEL_SENSOR_MODE_ARMED=0,

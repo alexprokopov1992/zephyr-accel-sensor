@@ -86,6 +86,53 @@ int get_mma8652_val(const struct device *dev, struct sensor_value *val)
 }
 
 
+static int write_reg(const struct device *i2c_dev, uint8_t reg, uint8_t data) {
+    return i2c_reg_write_byte(i2c_dev, MMA8652_ADDR, reg, data);
+}
+
+static void mma8652fc_config_motion()
+{
+	const struct device *i2c_dev = device_get_binding("I2C_1");
+
+    if (!i2c_dev) {
+        LOG_ERR("Failed to get I2C device");
+        return;
+    }
+
+	uint8_t int_src;
+
+	i2c_reg_read_byte(i2c_dev, MMA8652_ADDR, CTRL_REG1, &int_src);
+	int_src &= ~0x01;
+    write_reg(i2c_dev, CTRL_REG1, int_src);               // Standby
+
+    write_reg(i2c_dev, FF_MT_CFG, 0b11111000);         // Motion detection on XYZ
+	// write_reg(i2c_dev, F_SETUP, (0b10 << 6) | 16);               // Clear FF_MT_SRC register
+	write_reg(i2c_dev, F_SETUP, 0x00);               // Clear FF_MT_SRC register
+    write_reg(i2c_dev, FF_MT_THS, 0x01);               // ~0.063g
+    write_reg(i2c_dev, FF_MT_COUNT, 0x04);             // debounce count
+    write_reg(i2c_dev, CTRL_REG4, 0x04);               // Enable FF_MT interrupt
+    write_reg(i2c_dev, CTRL_REG5, 0x00);               // Route FF_MT to INT2
+
+	i2c_reg_read_byte(i2c_dev, MMA8652_ADDR, CTRL_REG1, &int_src);
+	int_src |= 0x01;
+    write_reg(i2c_dev, CTRL_REG1, int_src);               // Active mode
+
+    k_msleep(10); // let it settle
+
+    i2c_reg_read_byte(i2c_dev, MMA8652_ADDR, 0x0C, &int_src);
+    printk("INT_SOURCE: 0x%02X\n", int_src);
+
+	// i2c_reg_read_byte(i2c_dev, MMA8652_ADDR, CTRL_REG5, &int_src);
+    // printk("Value is: 0x%02X\n", int_src);
+
+	// i2c_reg_read_byte(i2c_dev, MMA8652_ADDR, F_SETUP, &int_src);
+    // printk("Value is: 0x%02X\n", int_src);
+
+	// i2c_reg_read_byte(i2c_dev, MMA8652_ADDR, FF_MT_COUNT, &int_src);
+    // printk("Value is: 0x%02X\n", int_src);
+}
+
+
 static void coarsering_tilt(struct accel_sensor_data *data, int level)
 {
 	if (level == 0)
@@ -607,8 +654,11 @@ static int init(const struct device *dev)
 	LOG_DBG("Accelerometer device: %s is ready", adev->name);
 
 	const struct device *mma = data->accel_dev;
+
 	sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_FULL_SCALE, &(struct sensor_value){ .val1 = 2, .val2 = 0 });
-    sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 20, .val2 = 0 });
+    sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 800, .val2 = 0 });
+
+	mma8652fc_config_motion();
 
 	init_warn_zones_tilt(dev);
 	set_warn_zone_tilt(dev, 5);
