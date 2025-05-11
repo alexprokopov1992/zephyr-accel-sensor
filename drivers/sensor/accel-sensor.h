@@ -31,6 +31,7 @@ enum accel_sensor_trigger_types {
 	ACCEL_MAIN_TRIGGER,
 	ACCEL_WARN_TRIGGER_MOVE,
 	ACCEL_MAIN_TRIGGER_MOVE,
+	ACCEL_DISARM_TRIGGER_MOVE,
 };
 
 enum accel_sensor_channel {
@@ -61,6 +62,7 @@ struct accel_sensor_data {
     const struct sensor_trigger *warn_trigger_tilt;
     sensor_trigger_handler_t main_handler_tilt;
     const struct sensor_trigger *main_trigger_tilt;
+
 	_Vector3 ref_acc_tilt;
 	_Vector3 last_acc_tilt;
 	float main_zone_cos_pow2[10];
@@ -90,8 +92,11 @@ struct accel_sensor_data {
     const struct sensor_trigger *warn_trigger_move;
     sensor_trigger_handler_t main_handler_move;
     const struct sensor_trigger *main_trigger_move;
-	_Vector3 ref_acc_move;
-	_Vector3 last_acc_move;
+
+	sensor_trigger_handler_t disarm_move_handler;
+	const struct sensor_trigger *disarm_move_trigger;
+
+	
 	float main_zone_move[10];
 	float warn_zone_move[10];
 	int selected_warn_zone_move;
@@ -104,14 +109,23 @@ struct accel_sensor_data {
 	bool warn_zone_active_move;
 	bool main_zone_active_move;
 
-    int samples_count_move;
+    _Vector3 last_acc_move;
+	_Vector3 ref_acc_move;
+	int samples_count_move;
 	_Vector3 summary_acc_move;
-
 	float gravity;
+	struct k_timer refresh_current_pos_timer_move;
+
+	_Vector3 last_acc_move_disarmed;
+	_Vector3 ref_acc_move_disarmed;
+	int samples_count_move_disarmed;
+	_Vector3 summary_acc_move_disarmed;
+	float gravity_disarmed;
+	struct k_timer refresh_current_pos_timer_move_disarmed;
+	int64_t last_trigger_time_disarmed_move;
 
 	int64_t last_trigger_time_warn_move;
     int64_t last_trigger_time_main_move;
-	struct k_timer refresh_current_pos_timer_move;
 	struct k_timer increase_sensivity_warn_timer_move;
 	struct k_timer increase_sensivity_main_timer_move;
 	struct k_timer alarm_timer_move;
