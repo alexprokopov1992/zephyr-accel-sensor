@@ -16,7 +16,7 @@ LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 #define M_PIf 3.1415927f
 #endif
 
-#define MOVE_SENSOR_SAMPLE_TIME 100
+#define MOVE_SENSOR_SAMPLE_TIME 20
 #define MOVE_SENSOR_SAMPLE_COUNT 5
 #define ACCEL_SENSOR_SAMPLE_TIME 1000
 
@@ -656,7 +656,7 @@ static int init(const struct device *dev)
 	const struct device *mma = data->accel_dev;
 
 	sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_FULL_SCALE, &(struct sensor_value){ .val1 = 2, .val2 = 0 });
-    sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 800, .val2 = 0 });
+    sensor_attr_set(mma, SENSOR_CHAN_ACCEL_XYZ, SENSOR_ATTR_SAMPLING_FREQUENCY, &(struct sensor_value){ .val1 = 60, .val2 = 0 });
 
 	mma8652fc_config_motion();
 
