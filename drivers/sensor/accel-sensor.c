@@ -202,6 +202,202 @@ static void coarsering_move(struct accel_sensor_data *data, int level)
 	}
 }
 
+static bool both_mode_disarmed(struct accel_sensor_data *data)
+{
+	if (data->mode_tilt == ACCEL_SENSOR_MODE_DISARMED && data->mode_move == ACCEL_SENSOR_MODE_DISARMED)
+	{
+		return true;
+	}
+	return false;
+}
+
+static void process_disarmed_move(struct accel_sensor_data *data, const struct device *dev, _Vector3 current_acc, int64_t current_time)
+{
+	if (data->samples_count_move_disarmed >= MOVE_SENSOR_SAMPLE_COUNT){
+			data->last_acc_move_disarmed.x = data->summary_acc_move_disarmed.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->last_acc_move_disarmed.y = data->summary_acc_move_disarmed.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->last_acc_move_disarmed.z = data->summary_acc_move_disarmed.z / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->summary_acc_move_disarmed.x = 0;
+			data->summary_acc_move_disarmed.y = 0;
+			data->summary_acc_move_disarmed.z = 0;
+			data->samples_count_move_disarmed = 0;
+
+			float acc_len = vector_length(data->last_acc_move_disarmed);
+			_Vector3 accelerate = {data->last_acc_move_disarmed.x - data->ref_acc_move_disarmed.x, data->last_acc_move_disarmed.y - data->ref_acc_move_disarmed.y, data->last_acc_move_disarmed.z - data->ref_acc_move_disarmed.z};
+			float accel = vector_length(accelerate);
+
+			if (data->gravity_disarmed > 0)
+			{
+				float change = (data->gravity_disarmed - acc_len)/data->gravity_disarmed;
+				if (change < border_move && change > -border_move)
+				{
+					data->gravity_disarmed = acc_len;
+					data->ref_acc_move_disarmed = data->last_acc_move_disarmed;
+				} else {
+					if (accel > data->warn_zone_move[data->selected_warn_zone_move]*data->gravity_disarmed) {
+						if (current_time - data->last_trigger_time_disarmed_move > MIN_WARN_INTERVAL) {
+							LOG_DBG("Disarmed move triggered");
+							LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f gravity: %10.6f last_acc: %10.6f", (double)data->last_acc_move_disarmed.x, (double)data->last_acc_move_disarmed.y, (double)data->last_acc_move_disarmed.z, (double)accel, (double)data->gravity_disarmed, (double)acc_len);
+							data->last_trigger_time_disarmed_move = current_time;
+							data->disarm_move_handler(dev, data->disarm_move_trigger);
+						}
+					}
+				}
+			}
+
+		} else {
+			data->summary_acc_move_disarmed.x += current_acc.x;
+			data->summary_acc_move_disarmed.y += current_acc.y;
+			data->summary_acc_move_disarmed.z += current_acc.z;
+			data->samples_count_move_disarmed++;
+		}
+}
+
+static bool process_tilt_mode(struct accel_sensor_data *data, const struct device *dev, _Vector3 current_acc, int64_t current_time)
+{
+	float pow_cos_theta = cospow2_between_vectors(data->ref_acc_tilt, current_acc);
+	if (pow_cos_theta == 0) {
+		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
+		return false;
+	}
+
+	if (pow_cos_theta < data->main_zone_cos_pow2[data->current_main_zone_tilt] && data->main_zone_active_tilt)
+	{
+		if (!data->max_main_alert_level_tilt){
+			data->mode_tilt = ACCEL_SENSOR_MODE_ALARM;
+			data->in_warn_alert_tilt = true;
+			data->in_main_alert_tilt = true;
+			coarsering_tilt(data, 1);
+			data->last_trigger_time_main_tilt = current_time;
+			LOG_DBG("MAIN TRIGGER TILT");
+			data->main_handler_tilt(dev, data->main_trigger_tilt);
+		}
+		k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+	} else if (pow_cos_theta < data->warn_zone_cos_pow2[data->current_warn_zone_tilt] && data->warn_zone_active_tilt) {
+		if (!data->max_warn_alert_level_tilt) {
+			if (current_time - data->last_trigger_time_warn_tilt > MIN_WARN_INTERVAL) {
+				data->in_warn_alert_tilt = true;
+				coarsering_tilt(data, 0);
+				data->last_trigger_time_warn_tilt = current_time;
+				LOG_DBG("WARN TRIGGER TILT");
+				data->warn_handler_tilt(dev, data->warn_trigger_tilt);
+			}
+			k_timer_start(&data->increase_sensivity_timer_tilt, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+		}	
+	}
+	return true;
+}
+
+static void process_move_mode(struct accel_sensor_data *data, const struct device *dev, _Vector3 current_acc, int64_t current_time)
+{
+	if (data->samples_count_move >= MOVE_SENSOR_SAMPLE_COUNT){
+			data->last_acc_move.x = data->summary_acc_move.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->last_acc_move.y = data->summary_acc_move.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->last_acc_move.z = data->summary_acc_move.z / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->summary_acc_move.x = 0;
+			data->summary_acc_move.y = 0;
+			data->summary_acc_move.z = 0;
+			data->samples_count_move = 0;
+
+			if (data->mode_move == ACCEL_SENSOR_MODE_ARMED)
+			{
+				float acc_len = vector_length(data->last_acc_move);
+				_Vector3 accelerate = {data->last_acc_move.x - data->ref_acc_move.x, data->last_acc_move.y - data->ref_acc_move.y, data->last_acc_move.z - data->ref_acc_move.z};
+				float accel = vector_length(accelerate);
+				if (data->gravity > 0)
+				{
+					float change = (data->gravity - acc_len)/data->gravity;
+					if (change < border_move && change > -border_move)
+					{
+						data->gravity = acc_len;
+						data->ref_acc_move = data->last_acc_move;
+					} else {
+						if (accel > data->main_zone_move[data->current_main_zone_move]*data->gravity && data->main_zone_active_move)
+						{
+							if (!data->max_main_alert_level_move){
+								data->mode_move = ACCEL_SENSOR_MODE_ALARM;
+								coarsering_move(data, 1);
+								LOG_DBG("Move Main zone move triggered");
+								data->last_trigger_time_main_move = current_time;
+								data->main_handler_move(dev, data->main_trigger_move);
+							}
+							k_timer_start(&data->increase_sensivity_main_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+						} else {
+							if (accel > data->warn_zone_move[data->current_warn_zone_move]*data->gravity && data->warn_zone_active_move) {
+								if (!data->max_warn_alert_level_move) {
+									if (current_time - data->last_trigger_time_warn_move > MIN_WARN_INTERVAL) {
+										coarsering_move(data, 0);
+										LOG_DBG("Move Warn zone move triggered");
+										data->last_trigger_time_warn_move = current_time;
+										data->warn_handler_move(dev, data->warn_trigger_move);
+									}
+								}
+								k_timer_start(&data->increase_sensivity_warn_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+							}
+						}
+					}
+
+					// LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f gravity: %10.6f last_acc: %10.6f", (double)data->last_acc_move.x, (double)data->last_acc_move.y, (double)data->last_acc_move.z, (double)accel, (double)data->gravity, (double)acc_len);
+				}
+			}	
+		} else {
+			data->summary_acc_move.x += current_acc.x;
+			data->summary_acc_move.y += current_acc.y;
+			data->summary_acc_move.z += current_acc.z;
+			data->samples_count_move++;
+		}
+}
+
+static void adc_vbus_work_handler_refactor(struct k_work *work)
+{
+	struct k_work_delayable *delayable = k_work_delayable_from_work(work);
+    struct accel_sensor_data *data = CONTAINER_OF(delayable, struct accel_sensor_data, dwork);
+	const struct device *dev = data->accel_dev;
+
+	struct sensor_value val[3];
+    get_mma8652_val(dev, val);
+
+	 _Vector3 current_acc = {
+        sensor_value_to_double(&val[0]),
+        sensor_value_to_double(&val[1]),
+        sensor_value_to_double(&val[2])
+    };
+    data->last_acc_tilt = current_acc;
+
+	int64_t current_time = k_uptime_get();
+
+	if (both_mode_disarmed(data))
+	{
+		process_disarmed_move(data, dev, current_acc, current_time);
+		k_work_schedule(&data->dwork, K_MSEC(MOVE_SENSOR_SAMPLE_TIME));
+		return;
+	}
+
+	bool allowed = false;
+	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED) {
+		data->skip_counter++;
+		if (data->skip_counter > 9) {
+			data->skip_counter = 0;
+			allowed = true;
+		} else {
+			allowed = false;
+		}
+	} else {
+		allowed = true;
+	}
+
+	if (data->mode_tilt == ACCEL_SENSOR_MODE_ARMED && allowed)
+	{
+		if (!process_tilt_mode(data, dev, current_acc, current_time)) return;
+	}
+
+	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED || data->mode_move == ACCEL_SENSOR_MODE_ALARM){
+		process_move_mode(data, dev, current_acc, current_time);
+	}
+
+	k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
+}
+
 static void adc_vbus_work_handler(struct k_work *work)
 {
     struct k_work_delayable *delayable = k_work_delayable_from_work(work);
