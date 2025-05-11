@@ -9,8 +9,8 @@
 #include "accel-sensor.h"
 #include <math.h>
 
-// LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
-LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
+// LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 
 #if !defined(M_PIf)
 #define M_PIf 3.1415927f
@@ -24,6 +24,7 @@ LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 #define REFRESH_POS_TIME_MOVE 10
 #define INCREASE_SENSIVITY_TIME 10
 #define ARMING_DELAY_SEC 10
+#define ARMING_DELAY_SEC_DIS 1
 #define MIN_WARN_INTERVAL 2000 // ms
 #define STOP_ACCEL_ALARM_INTERVAL 5000
 
@@ -206,11 +207,6 @@ static void adc_vbus_work_handler(struct k_work *work)
     struct k_work_delayable *delayable = k_work_delayable_from_work(work);
     struct accel_sensor_data *data = CONTAINER_OF(delayable, struct accel_sensor_data, dwork);
 
-	if (data->mode_tilt == ACCEL_SENSOR_MODE_DISARMED && data->mode_move == ACCEL_SENSOR_MODE_DISARMED) {
-		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
-		return;
-	}
-
 	const struct device *dev = data->accel_dev;
 
 	struct sensor_value val[3];
@@ -221,7 +217,50 @@ static void adc_vbus_work_handler(struct k_work *work)
     float az = sensor_value_to_double(&val[2]);
     _Vector3 current_acc = {ax, ay, az};
     data->last_acc_tilt = current_acc;
-	// data->last_acc_move = current_acc;
+
+	if (data->mode_tilt == ACCEL_SENSOR_MODE_DISARMED && data->mode_move == ACCEL_SENSOR_MODE_DISARMED) {
+		int64_t current_time = k_uptime_get();
+		if (data->samples_count_move_disarmed >= MOVE_SENSOR_SAMPLE_COUNT){
+			data->last_acc_move_disarmed.x = data->summary_acc_move_disarmed.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->last_acc_move_disarmed.y = data->summary_acc_move_disarmed.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->last_acc_move_disarmed.z = data->summary_acc_move_disarmed.z / (float)MOVE_SENSOR_SAMPLE_COUNT;
+			data->summary_acc_move_disarmed.x = 0;
+			data->summary_acc_move_disarmed.y = 0;
+			data->summary_acc_move_disarmed.z = 0;
+			data->samples_count_move_disarmed = 0;
+
+			float acc_len = vector_length(data->last_acc_move_disarmed);
+			_Vector3 accelerate = {data->last_acc_move_disarmed.x - data->ref_acc_move_disarmed.x, data->last_acc_move_disarmed.y - data->ref_acc_move_disarmed.y, data->last_acc_move_disarmed.z - data->ref_acc_move_disarmed.z};
+			float accel = vector_length(accelerate);
+
+			if (data->gravity_disarmed > 0)
+			{
+				float change = (data->gravity_disarmed - acc_len)/data->gravity_disarmed;
+				if (change < border_move && change > -border_move)
+				{
+					data->gravity_disarmed = acc_len;
+					data->ref_acc_move_disarmed = data->last_acc_move_disarmed;
+				} else {
+					if (accel > data->warn_zone_move[data->selected_warn_zone_move]*data->gravity_disarmed) {
+						if (current_time - data->last_trigger_time_disarmed_move > MIN_WARN_INTERVAL) {
+							LOG_DBG("Disarmed move triggered");
+							LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f gravity: %10.6f last_acc: %10.6f", (double)data->last_acc_move_disarmed.x, (double)data->last_acc_move_disarmed.y, (double)data->last_acc_move_disarmed.z, (double)accel, (double)data->gravity_disarmed, (double)acc_len);
+							data->last_trigger_time_disarmed_move = current_time;
+							data->disarm_move_handler(dev, data->disarm_move_trigger);
+						}
+					}
+				}
+			}
+
+		} else {
+			data->summary_acc_move_disarmed.x += ax;
+			data->summary_acc_move_disarmed.y += ay;
+			data->summary_acc_move_disarmed.z += az;
+			data->samples_count_move_disarmed++;
+		}
+		k_work_schedule(&data->dwork, K_MSEC(MOVE_SENSOR_SAMPLE_TIME));
+		return;
+	}
 
 	bool allowed = false;
 	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED) {
@@ -504,6 +543,34 @@ static void refresh_current_pos_timer_handler_move(struct k_timer *timer)
 	}
 }
 
+static void refresh_current_pos_timer_handler_move_disarmed(struct k_timer *timer)
+{
+    struct accel_sensor_data *data = CONTAINER_OF(timer, struct accel_sensor_data, refresh_current_pos_timer_move_disarmed);
+	if (data->mode_move == ACCEL_SENSOR_MODE_DISARMED)
+	{
+		LOG_DBG("Refreshing ref_acc_move_disarmed");
+		float accel = vector_length(data->last_acc_move_disarmed);
+		if (data->ref_acc_move_disarmed.x == 0 && data->ref_acc_move_disarmed.y == 0 && data->ref_acc_move_disarmed.z == 0)
+		{
+			data->gravity_disarmed = accel;
+			data->ref_acc_move_disarmed = data->last_acc_move_disarmed;
+			LOG_DBG("ref_acc_move_disarmed Refreshed Init %.6f", (double)data->gravity_disarmed);
+		} else {
+			float change = (data->gravity_disarmed - accel)/data->gravity_disarmed;
+			if ( change < border_move && change > -border_move)
+			{
+				data->gravity_disarmed = accel;
+				data->ref_acc_move_disarmed = data->last_acc_move_disarmed;
+				LOG_DBG("ref_acc_move_disarmed Refreshed Gravity change %.6f", (double)data->gravity_disarmed);
+			} else {
+				LOG_DBG("Move Too big difference %.6f", (double)accel);
+				k_timer_start(&data->refresh_current_pos_timer_move_disarmed, K_SECONDS(5), K_NO_WAIT);
+				return;
+			} 
+		} 
+	}
+}
+
 static void alarm_timer_handler_tilt(struct k_timer *timer)
 {
 	LOG_DBG("Alarm timer expired");
@@ -709,6 +776,11 @@ static int init(const struct device *dev)
 	k_timer_init(&data->increase_sensivity_warn_timer_move, increase_sensivity_warn_timer_handler_move, NULL);
 	k_timer_init(&data->increase_sensivity_main_timer_move, increase_sensivity_main_timer_handler_move, NULL);
 	k_timer_init(&data->alarm_timer_move, alarm_timer_handler_move, NULL);
+	k_timer_init(&data->refresh_current_pos_timer_move_disarmed, refresh_current_pos_timer_handler_move_disarmed, NULL);
+	data->samples_count_move_disarmed = 0;
+	data->summary_acc_move_disarmed.x = 0;
+	data->summary_acc_move_disarmed.y = 0;
+	data->summary_acc_move_disarmed.z = 0;
 	data->samples_count_move = 0;
 	data->summary_acc_move.x = 0;
 	data->summary_acc_move.y = 0;
@@ -859,6 +931,15 @@ static int _attr_set(const struct device *dev,
 						LOG_DBG("ACCEL_SENSOR_MODE_DISARMED_MOVE");
 						data->mode_move = val1;
 						data->sampling_period_ms = ACCEL_SENSOR_SAMPLE_TIME;
+						data->samples_count_move_disarmed = 0;
+						data->summary_acc_move_disarmed.x = 0;
+						data->summary_acc_move_disarmed.y = 0;
+						data->summary_acc_move_disarmed.z = 0;
+						data->ref_acc_move_disarmed.x = 0;
+						data->ref_acc_move_disarmed.y = 0;
+						data->ref_acc_move_disarmed.z = 0;
+						data->gravity_disarmed = 0;
+						k_timer_start(&data->refresh_current_pos_timer_move_disarmed, K_SECONDS(ARMING_DELAY_SEC_DIS), K_NO_WAIT);
 						k_timer_stop(&data->alarm_timer_move);
 						k_timer_stop(&data->refresh_current_pos_timer_move);
 						k_timer_stop(&data->increase_sensivity_warn_timer_move);
@@ -889,6 +970,7 @@ static int _attr_set(const struct device *dev,
 						data->summary_acc_move.y = 0;
 						data->summary_acc_move.z = 0;
 						data->gravity = 0;
+						k_timer_stop(&data->refresh_current_pos_timer_move_disarmed);
 						k_timer_start(&data->refresh_current_pos_timer_move, K_SECONDS(ARMING_DELAY_SEC), K_NO_WAIT);
 						k_timer_stop(&data->increase_sensivity_warn_timer_move);
 						k_timer_stop(&data->increase_sensivity_main_timer_move);
@@ -911,6 +993,15 @@ static int _attr_set(const struct device *dev,
 						LOG_DBG("ACCEL_SENSOR_MODE_DISARMED_MOVE");
 						data->sampling_period_ms = ACCEL_SENSOR_SAMPLE_TIME;
 						data->mode_move = val1;
+						data->samples_count_move_disarmed = 0;
+						data->summary_acc_move_disarmed.x = 0;
+						data->summary_acc_move_disarmed.y = 0;
+						data->summary_acc_move_disarmed.z = 0;
+						data->ref_acc_move_disarmed.x = 0;
+						data->ref_acc_move_disarmed.y = 0;
+						data->ref_acc_move_disarmed.z = 0;
+						data->gravity_disarmed = 0;
+						k_timer_start(&data->refresh_current_pos_timer_move_disarmed, K_SECONDS(ARMING_DELAY_SEC_DIS), K_NO_WAIT);
 						k_timer_stop(&data->alarm_timer_move);
 						k_timer_stop(&data->refresh_current_pos_timer_move);
 						k_timer_stop(&data->increase_sensivity_warn_timer_move);

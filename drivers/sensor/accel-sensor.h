@@ -96,8 +96,7 @@ struct accel_sensor_data {
 	sensor_trigger_handler_t disarm_move_handler;
 	const struct sensor_trigger *disarm_move_trigger;
 
-	_Vector3 ref_acc_move;
-	_Vector3 last_acc_move;
+	
 	float main_zone_move[10];
 	float warn_zone_move[10];
 	int selected_warn_zone_move;
@@ -110,14 +109,23 @@ struct accel_sensor_data {
 	bool warn_zone_active_move;
 	bool main_zone_active_move;
 
-    int samples_count_move;
+    _Vector3 last_acc_move;
+	_Vector3 ref_acc_move;
+	int samples_count_move;
 	_Vector3 summary_acc_move;
-
 	float gravity;
+	struct k_timer refresh_current_pos_timer_move;
+
+	_Vector3 last_acc_move_disarmed;
+	_Vector3 ref_acc_move_disarmed;
+	int samples_count_move_disarmed;
+	_Vector3 summary_acc_move_disarmed;
+	float gravity_disarmed;
+	struct k_timer refresh_current_pos_timer_move_disarmed;
+	int64_t last_trigger_time_disarmed_move;
 
 	int64_t last_trigger_time_warn_move;
     int64_t last_trigger_time_main_move;
-	struct k_timer refresh_current_pos_timer_move;
 	struct k_timer increase_sensivity_warn_timer_move;
 	struct k_timer increase_sensivity_main_timer_move;
 	struct k_timer alarm_timer_move;
