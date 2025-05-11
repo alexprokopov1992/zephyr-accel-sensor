@@ -31,6 +31,7 @@ enum accel_sensor_trigger_types {
 	ACCEL_MAIN_TRIGGER,
 	ACCEL_WARN_TRIGGER_MOVE,
 	ACCEL_MAIN_TRIGGER_MOVE,
+	ACCEL_DISARM_TRIGGER_MOVE,
 };
 
 enum accel_sensor_channel {
@@ -61,6 +62,7 @@ struct accel_sensor_data {
     const struct sensor_trigger *warn_trigger_tilt;
     sensor_trigger_handler_t main_handler_tilt;
     const struct sensor_trigger *main_trigger_tilt;
+
 	_Vector3 ref_acc_tilt;
 	_Vector3 last_acc_tilt;
 	float main_zone_cos_pow2[10];
@@ -90,6 +92,10 @@ struct accel_sensor_data {
     const struct sensor_trigger *warn_trigger_move;
     sensor_trigger_handler_t main_handler_move;
     const struct sensor_trigger *main_trigger_move;
+
+	sensor_trigger_handler_t disarm_move_handler;
+	const struct sensor_trigger *disarm_move_trigger;
+
 	_Vector3 ref_acc_move;
 	_Vector3 last_acc_move;
 	float main_zone_move[10];

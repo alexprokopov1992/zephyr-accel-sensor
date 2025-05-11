@@ -752,6 +752,10 @@ static int _trigger_set(const struct device *dev,
 			data->main_handler_move = handler;
 			data->main_trigger_move = trig;
 			break;
+		case ACCEL_DISARM_TRIGGER_MOVE:
+			data->disarm_move_handler = handler;
+			data->disarm_move_trigger = trig;
+			break;
         default:
             return -ENOTSUP;
 	}
