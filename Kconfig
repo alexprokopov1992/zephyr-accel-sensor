@@ -1,22 +1,16 @@
+# Sensirion SCD30 CO2 sensor configuration options
+
+# Copyright (c) 2021 Advanced Climate Systems
 # SPDX-License-Identifier: Apache-2.0
 
-config LIS2DW12_ACCEL_SENSOR
-	bool "LIS2DW12 Accelerometer Sensor Driver"
-	default y
-	depends on DT_HAS_FENIX_LIS2DW12_ACCEL_ENABLED
-	depends on SPI
-	depends on GPIO
-	depends on SENSOR
+config ZEPHYR_ACCEL_SENSOR
+	bool "Accelerometer Sensor"
+	select I2C
 	help
-	  Enable driver for STMicroelectronics LIS2DW12 3-axis accelerometer.
-	  This driver supports SPI interface and interrupt-driven data acquisition.
+	  Enable driver for Accelerometer Sensor. Tilt, Move, etc.
 
-if LIS2DW12_ACCEL_SENSOR
-
-config LIS2DW12_ACCEL_SENSOR_INIT_PRIORITY
-	int "LIS2DW12 sensor init priority"
-	default 70
+config ACCEL_SENSOR_INIT_PRIORITY
+	int "Accelerometer Sensor Initialization Priority"
+	default 90
 	help
-	  Device driver initialization priority.
-
-endif # LIS2DW12_ACCEL_SENSOR
+	  Priority of the Accelerometer Sensor initialization.
