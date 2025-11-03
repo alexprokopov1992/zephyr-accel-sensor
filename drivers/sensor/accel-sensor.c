@@ -8,14 +8,16 @@
 #include "accel-sensor.h"
 #include <math.h>
 
-LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
-// LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
+// LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 
 K_THREAD_STACK_DEFINE(accel_thread_stack, ACCEL_THREAD_STACK_SIZE);
 
 #if !defined(M_PIf)
 #define M_PIf 3.1415927f
 #endif
+
+#define GRAVITY_MS2 9.80665f
 
 #define MOVE_SENSOR_SAMPLE_TIME 20
 #define MOVE_SENSOR_SAMPLE_COUNT 5
@@ -636,12 +638,35 @@ void accel_thread(void *dev_ptr, void *arg2, void *arg3)
 			continue;
 		}
 
-		float ax = sensor_value_to_double(&data_val[0]);
-		float ay = sensor_value_to_double(&data_val[1]);
-		float az = sensor_value_to_double(&data_val[2]);
+		// float ax_ms2 = sensor_value_to_double(&data_val[0]);
+        // float ay_ms2 = sensor_value_to_double(&data_val[1]);
+        // float az_ms2 = sensor_value_to_double(&data_val[2]);
+
+		// float ax = ax_ms2 / GRAVITY_MS2;
+        // float ay = ay_ms2 / GRAVITY_MS2;
+        // float az = az_ms2 / GRAVITY_MS2;
+
+		// static int sample_count = 0;
+        // if (sample_count < 10) {
+        //     float magnitude = sqrtf(ax*ax + ay*ay + az*az);
+        //     printk("Sample %d: X=%d.%03d Y=%d.%03d Z=%d.%03d |G|=%d.%03d g\n",
+        //            sample_count,
+        //            (int)ax, abs((int)((ax - (int)ax) * 1000)),
+        //            (int)ay, abs((int)((ay - (int)ay) * 1000)),
+        //            (int)az, abs((int)((az - (int)az) * 1000)),
+        //            (int)magnitude, abs((int)((magnitude - (int)magnitude) * 1000)));
+        //     sample_count++;
+        // }
+
+		float ax = sensor_value_to_double(&data_val[0]) / GRAVITY_MS2;
+        float ay = sensor_value_to_double(&data_val[1]) / GRAVITY_MS2;
+        float az = sensor_value_to_double(&data_val[2]) / GRAVITY_MS2;
+
 		_Vector3 current_acc = {ax, ay, az};
 		data->last_acc_tilt = current_acc;
 
+		
+		
 		if (data->mode_tilt == ACCEL_SENSOR_MODE_DISARMED && data->mode_move == ACCEL_SENSOR_MODE_DISARMED) {
 			int64_t current_time = k_uptime_get();
 			if (data->samples_count_move_disarmed >= MOVE_SENSOR_SAMPLE_COUNT){
@@ -803,10 +828,10 @@ void accel_thread(void *dev_ptr, void *arg2, void *arg3)
 		// force_send_state();
 
 		// LOG_ERR(
-		//     "Move sensor value X:%10.3f Y:%10.3f X:%10.3f",
-		//     sensor_value_to_double(&val[0]),
-		//     sensor_value_to_double(&val[1]),
-		//     sensor_value_to_double(&val[2])
+		//     "Move sensor value X:%10.3f Y:%10.3f Z:%10.3f",
+		//     sensor_value_to_double(&data_val[0]),
+		//     sensor_value_to_double(&data_val[1]),
+		//     sensor_value_to_double(&data_val[2])
 		//     // val[0].val1, val[1].val1, val[2].val1
 		// );
 		// adc_vbus_process();
