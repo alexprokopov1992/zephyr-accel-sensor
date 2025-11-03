@@ -1,6 +1,6 @@
-name: zephyr_accel_sensor
+name: lis2dw12-driver
 build:
-  cmake: .
   kconfig: Kconfig
+  cmake: .
   settings:
     dts_root: .

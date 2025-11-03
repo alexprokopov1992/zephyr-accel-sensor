@@ -1,0 +1,23 @@
+/* LIS2DW12 підключений до SPI4 */
+
+&spi4 {
+	status = "okay";
+	cs-gpios = <&gpioe 15 GPIO_ACTIVE_LOW>;
+	
+	lis2dw12_sensor: lis2dw12@0 {
+		compatible = "fenix,lis2dw12-accel";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+		
+		/* Варіант 1 (рекомендовано): */
+		int-gpios = <&gpiob 10 GPIO_ACTIVE_HIGH>;
+			
+		status = "okay";
+	};
+};
+
+/ {
+	aliases {
+		accel0 = &lis2dw12_sensor;
+	};
+};

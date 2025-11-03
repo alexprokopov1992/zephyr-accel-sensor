@@ -2,17 +2,86 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/spi.h>
+#include <zephyr/drivers/gpio.h>
 
-#define MMA8652_ADDR 0x1D
-#define CTRL_REG1      0x2A
-#define FF_MT_CFG      0x15
-#define FF_MT_THS      0x17
-#define FF_MT_COUNT    0x18
-#define CTRL_REG4      0x2D
-#define CTRL_REG5      0x2E
-#define F_SETUP        0x09
+/* LIS2DW12 Register addresses */
+#define LIS2DW12_REG_OUT_T_L        0x0D
+#define LIS2DW12_REG_OUT_T_H        0x0E
+#define LIS2DW12_REG_WHO_AM_I       0x0F
+#define LIS2DW12_REG_CTRL1          0x20
+#define LIS2DW12_REG_CTRL2          0x21
+#define LIS2DW12_REG_CTRL3          0x22
+#define LIS2DW12_REG_CTRL4_INT1     0x23
+#define LIS2DW12_REG_CTRL5_INT2     0x24
+#define LIS2DW12_REG_CTRL6          0x25
+#define LIS2DW12_REG_OUT_T          0x26
+#define LIS2DW12_REG_STATUS         0x27
+#define LIS2DW12_REG_OUT_X_L        0x28
+#define LIS2DW12_REG_OUT_X_H        0x29
+#define LIS2DW12_REG_OUT_Y_L        0x2A
+#define LIS2DW12_REG_OUT_Y_H        0x2B
+#define LIS2DW12_REG_OUT_Z_L        0x2C
+#define LIS2DW12_REG_OUT_Z_H        0x2D
+#define LIS2DW12_REG_FIFO_CTRL      0x2E
+#define LIS2DW12_REG_FIFO_SAMPLES   0x2F
+#define LIS2DW12_REG_TAP_THS_X      0x30
+#define LIS2DW12_REG_TAP_THS_Y      0x31
+#define LIS2DW12_REG_TAP_THS_Z      0x32
+#define LIS2DW12_REG_INT_DUR        0x33
+#define LIS2DW12_REG_WAKE_UP_THS    0x34
+#define LIS2DW12_REG_WAKE_UP_DUR    0x35
+#define LIS2DW12_REG_FREE_FALL      0x36
+#define LIS2DW12_REG_STATUS_DUP     0x37
+#define LIS2DW12_REG_WAKE_UP_SRC    0x38
+#define LIS2DW12_REG_TAP_SRC        0x39
+#define LIS2DW12_REG_SIXD_SRC       0x3A
+#define LIS2DW12_REG_ALL_INT_SRC    0x3B
+#define LIS2DW12_REG_X_OFS_USR      0x3C
+#define LIS2DW12_REG_Y_OFS_USR      0x3D
+#define LIS2DW12_REG_Z_OFS_USR      0x3E
+#define LIS2DW12_REG_CTRL7          0x3F
 
+/* WHO_AM_I value */
+#define LIS2DW12_WHO_AM_I_VALUE     0x44
+
+/* CTRL1 register bits */
+#define LIS2DW12_CTRL1_ODR_SHIFT    4
+#define LIS2DW12_CTRL1_ODR_MASK     0xF0
+#define LIS2DW12_CTRL1_MODE_SHIFT   2
+#define LIS2DW12_CTRL1_MODE_MASK    0x0C
+#define LIS2DW12_CTRL1_LP_MODE_SHIFT 0
+#define LIS2DW12_CTRL1_LP_MODE_MASK 0x03
+
+/* CTRL2 register bits */
+#define LIS2DW12_CTRL2_BOOT         0x80
+#define LIS2DW12_CTRL2_SOFT_RESET   0x40
+#define LIS2DW12_CTRL2_CS_PU_DISC   0x10
+#define LIS2DW12_CTRL2_BDU          0x08
+#define LIS2DW12_CTRL2_IF_ADD_INC   0x04
+
+/* CTRL3 register bits */
+#define LIS2DW12_CTRL3_SLP_MODE_1   0x02
+#define LIS2DW12_CTRL3_SLP_MODE_SEL 0x01
+
+/* CTRL4_INT1_PAD_CTRL register bits */
+#define LIS2DW12_CTRL4_INT1_DRDY    0x01
+
+/* CTRL6 register bits */
+#define LIS2DW12_CTRL6_BW_FILT_SHIFT 6
+#define LIS2DW12_CTRL6_BW_FILT_MASK 0xC0
+#define LIS2DW12_CTRL6_FS_SHIFT     4
+#define LIS2DW12_CTRL6_FS_MASK      0x30
+#define LIS2DW12_CTRL6_FDS          0x08
+#define LIS2DW12_CTRL6_LOW_NOISE    0x04
+
+/* STATUS register bits */
+#define LIS2DW12_STATUS_DRDY        0x01
+
+/* SPI read/write bit */
+#define LIS2DW12_SPI_READ           0x80
+#define LIS2DW12_SPI_WRITE          0x00
+#define LIS2DW12_SPI_AUTO_INC       0x40
 
 enum accel_sensor_mode {
     ACCEL_SENSOR_MODE_ARMED=0,
@@ -44,20 +113,30 @@ enum accel_sensor_channel {
 	ACCEL_SENSOR_CHANNEL_MAIN_ZONE_MOVE,
 };
 
-struct accel_sensor_config {
-	// const struct i2c_dt_spec bus;
-	const struct device *accel_dev;
-};
-
 typedef struct {
 	float x, y, z;
 } _Vector3;
 
-struct accel_sensor_data {
+struct lis2dw12_config {
+	struct spi_dt_spec spi;
+	struct gpio_dt_spec int_gpio;
+};
+
+struct lis2dw12_data {
 	uint16_t sampling_period_ms;
 	struct k_work_delayable dwork;
-	const struct device *accel_dev;
-	//поля стуртури для нахилу
+	
+	/* Interrupt handling */
+	struct gpio_callback gpio_cb;
+	const struct device *dev;
+	struct k_sem data_ready_sem;
+	
+	/* Raw accelerometer data */
+	int16_t accel_x;
+	int16_t accel_y;
+	int16_t accel_z;
+	
+	/* Tilt detection fields */
 	sensor_trigger_handler_t warn_handler_tilt;
     const struct sensor_trigger *warn_trigger_tilt;
     sensor_trigger_handler_t main_handler_tilt;
@@ -87,7 +166,8 @@ struct accel_sensor_data {
 	struct k_timer alarm_timer_tilt;
 
 	int skip_counter;
-	//поля структури для переміщення
+	
+	/* Movement detection fields */
 	sensor_trigger_handler_t warn_handler_move;
     const struct sensor_trigger *warn_trigger_move;
     sensor_trigger_handler_t main_handler_move;
@@ -95,7 +175,6 @@ struct accel_sensor_data {
 
 	sensor_trigger_handler_t disarm_move_handler;
 	const struct sensor_trigger *disarm_move_trigger;
-
 	
 	float main_zone_move[10];
 	float warn_zone_move[10];
@@ -131,31 +210,10 @@ struct accel_sensor_data {
 	struct k_timer alarm_timer_move;
 };
 
-
-/**
- * @typedef sensor_attr_set_t
- * @brief Callback API upon setting a sensor's attributes
- *
- * See sensor_attr_set() for argument description
- */
 typedef int (*sensor_attr_set_t)(const struct device *dev,
 	enum sensor_channel chan,
 	enum sensor_attribute attr,
 	const struct sensor_value *val);
-
-#if 0
-/**
- * @typedef sensor_attr_get_t
- * @brief Callback API upon getting a sensor's attributes
- *
- * See sensor_attr_get() for argument description
- */
-typedef int (*sensor_attr_get_t)(const struct device *dev,
-	enum sensor_channel chan,
-	enum sensor_attribute attr,
-	struct sensor_value *val);
-
-#endif
 
 typedef int (*set_current_position_as_reference_t)(const struct device *dev);
 typedef int (*set_sensor_settings_t)(const struct device *dev, int channel, int val1, int val2);
@@ -165,13 +223,7 @@ __subsystem struct accel_sensor_driver_api {
 	set_current_position_as_reference_t set_current_position_as_reference;
 	set_sensor_settings_t attr_set;
 	sensor_trigger_set_t trigger_set;
-	// sensor_attr_get_t attr_get;
-	// sensor_sample_fetch_t sample_fetch;
-	// sensor_channel_get_t channel_get;
-	// sensor_get_decoder_t get_decoder;
-	// sensor_submit_t submit;
 };
-
 
 static inline int accel_sensor_trigger_set(const struct device *dev, const struct sensor_trigger *trig,	sensor_trigger_handler_t handler)
 {
@@ -194,7 +246,6 @@ static inline int accel_sensor_attr_set(const struct device *dev, int channel, i
 
 	return api->attr_set(dev, channel, val1, val2);
 }
-
 
 static inline int accel_sensor_set_current_position_as_reference(const struct device *dev)
 {
