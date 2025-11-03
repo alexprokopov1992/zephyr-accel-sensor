@@ -12,32 +12,6 @@
 
 LOG_MODULE_REGISTER(lis2dw12_sensor, CONFIG_SENSOR_LOG_LEVEL);
 
-#if !defined(M_PIf)
-#define M_PIf 3.1415927f
-#endif
-
-#define MOVE_SENSOR_SAMPLE_TIME 20
-#define MOVE_SENSOR_SAMPLE_COUNT 5
-#define ACCEL_SENSOR_SAMPLE_TIME 1000
-
-#define REFRESH_POS_TIME 3600
-#define REFRESH_POS_TIME_MOVE 10
-#define INCREASE_SENSIVITY_TIME 10
-#define ARMING_DELAY_SEC 10
-#define ARMING_DELAY_SEC_DIS 1
-#define MIN_WARN_INTERVAL 2000 // ms
-#define STOP_ACCEL_ALARM_INTERVAL 5000
-
-static float warn_zone_start_angle = 1.0;
-static float warn_zone_step_angle = 2.0/9.0;
-static float max_angle = 10.00;
-static const float cos_pow_0_5  = 0.999961923;
-
-static float border_move = 0.0005;
-
-static float warn_zone_accel_mult = 0.001;
-static float warn_zone_step_accel_mult_step = 0.001;
-static float main_zone_max_mult = 0.1;
 
 /* SPI read/write functions */
 static int lis2dw12_spi_read_reg(const struct device *dev, uint8_t reg, uint8_t *data, uint16_t len)

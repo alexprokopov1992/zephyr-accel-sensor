@@ -4,7 +4,34 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/sensor.h>
 
+static float warn_zone_start_angle = 1.0;
+static float warn_zone_step_angle = 2.0/9.0;
+static float max_angle = 10.00;
+static const float cos_pow_0_5  = 0.999961923;
+
+static float border_move = 0.0005;
+
+static float warn_zone_accel_mult = 0.001;
+static float warn_zone_step_accel_mult_step = 0.001;
+static float main_zone_max_mult = 0.1;
+
+#if !defined(M_PIf)
+#define M_PIf 3.1415927f
+#endif
+
+#define MOVE_SENSOR_SAMPLE_TIME 20
+#define MOVE_SENSOR_SAMPLE_COUNT 5
+#define ACCEL_SENSOR_SAMPLE_TIME 1000
+
+#define REFRESH_POS_TIME 3600
+#define REFRESH_POS_TIME_MOVE 10
+#define INCREASE_SENSIVITY_TIME 10
+#define ARMING_DELAY_SEC 10
+#define ARMING_DELAY_SEC_DIS 1
+#define MIN_WARN_INTERVAL 2000 // ms
+#define STOP_ACCEL_ALARM_INTERVAL 5000
 /* LIS2DW12 Register addresses */
 #define LIS2DW12_REG_OUT_T_L        0x0D
 #define LIS2DW12_REG_OUT_T_H        0x0E

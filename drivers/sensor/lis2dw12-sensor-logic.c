@@ -1,5 +1,7 @@
 /* This file contains the detection logic copied from the original driver */
 /* It should be included at the end of lis2dw12-sensor.c */
+#include "lis2dw12-sensor.h"
+
 
 static void coarsering_tilt(struct lis2dw12_data *data, int level)
 {

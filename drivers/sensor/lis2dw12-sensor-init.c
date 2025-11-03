@@ -1,5 +1,5 @@
 /* Initialization and API functions for LIS2DW12 driver */
-
+#include "lis2dw12-sensor.h"
 /* Work handler for periodic data processing */
 static void accel_work_handler(struct k_work *work)
 {
