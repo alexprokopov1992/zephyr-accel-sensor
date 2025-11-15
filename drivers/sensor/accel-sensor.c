@@ -43,15 +43,9 @@ static float warn_zone_step_accel_mult_step = 0.001;
 static float main_zone_max_mult = 0.1;
 
 const struct device *const dev = DEVICE_DT_GET(DT_ALIAS(accel0));
-K_SEM_DEFINE(sema, 0, 1);
 
 #define STACK_SIZE 1024
 #define THREAD_PRIORITY 5
-
-struct sensor_trigger trig = {
-		.type = SENSOR_TRIG_DATA_READY,
-		.chan = SENSOR_CHAN_ACCEL_XYZ,
-};
 
 // Функція для обчислення довжини вектора
 float vector_length(_Vector3 v) {
@@ -608,21 +602,10 @@ static void increase_sensivity_main_timer_handler_move(struct k_timer *timer)
 	}
 }
 
-static void trigger_handler(const struct device *adev, const struct sensor_trigger *trigger)
-{
-	ARG_UNUSED(trigger);
-
-	if (sensor_sample_fetch(adev)) {
-		printf("sensor_sample_fetch failed\n");
-		return;
-	}
-
-	k_sem_give(&sema);
-}
-
 
 void accel_thread(void *dev_ptr, void *arg2, void *arg3)
 {
+
 	const struct device *dev = (const struct device *)dev_ptr;
 	struct sensor_value data_val[3];
 	struct accel_sensor_data *data = dev->data;
@@ -631,7 +614,12 @@ void accel_thread(void *dev_ptr, void *arg2, void *arg3)
 	LOG_INF("Accel thread started (%s)", dev->name);
 
 	while (data->thread_running) {
-		k_sem_take(&sema, K_FOREVER);
+        
+        k_sleep(K_MSEC(data->sampling_period_ms));
+
+		if (sensor_sample_fetch(adev) < 0) {
+            continue;
+        }
 
 		if (sensor_channel_get(adev, SENSOR_CHAN_ACCEL_XYZ, data_val) < 0) {
 			printf("sensor_channel_get failed\n");
@@ -664,8 +652,6 @@ void accel_thread(void *dev_ptr, void *arg2, void *arg3)
 
 		_Vector3 current_acc = {ax, ay, az};
 		data->last_acc_tilt = current_acc;
-
-		
 		
 		if (data->mode_tilt == ACCEL_SENSOR_MODE_DISARMED && data->mode_move == ACCEL_SENSOR_MODE_DISARMED) {
 			int64_t current_time = k_uptime_get();
@@ -845,19 +831,15 @@ static int init(const struct device *dev)
 {
 	const struct accel_sensor_config *cfg = dev->config;
 	struct accel_sensor_data *data = dev->data;
+
 	LOG_DBG("Initializing Accelerometer Sensor (%s)", dev->name);
 	const struct device *adev = cfg->accel_dev;
 	if (!device_is_ready(adev)) {
 		LOG_ERR("Accelerometer device %s not ready", adev->name);
 		return -ENODEV;
 	}
-	
-	LOG_DBG("Accelerometer device: %s is ready", adev->name);
 
-	if (sensor_trigger_set(adev, &trig, trigger_handler)) {
-		LOG_ERR("Could not set trigger");
-		return -ENODEV;
-	}
+	LOG_DBG("Accelerometer device: %s is ready", adev->name);
 
 	init_warn_zones_tilt(dev);
 	set_warn_zone_tilt(dev, 5);
@@ -911,7 +893,7 @@ static int init(const struct device *dev)
     K_THREAD_STACK_SIZEOF(accel_thread_stack),
     accel_thread,
     (void *)dev, NULL, NULL,
-    THREAD_PRIORITY, 0, K_NO_WAIT);
+    THREAD_PRIORITY, 0, K_MSEC(1000));
 
 	k_thread_name_set(data->thread_id, "accel_thread");
 	LOG_INF("Accelerometer thread started");
