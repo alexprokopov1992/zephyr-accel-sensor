@@ -622,7 +622,7 @@ void accel_thread(void *dev_ptr, void *arg2, void *arg3)
         }
 
 		if (sensor_channel_get(adev, SENSOR_CHAN_ACCEL_XYZ, data_val) < 0) {
-			printf("sensor_channel_get failed\n");
+			LOG_ERR("sensor_channel_get failed");
 			continue;
 		}
 
