@@ -2,6 +2,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
+#include <zephyr/drivers/sensor.h>
 
 enum accel_sensor_mode {
     ACCEL_SENSOR_MODE_ARMED=0,
@@ -41,17 +42,19 @@ typedef struct {
 	float x, y, z;
 } _Vector3;
 
-#define ACCEL_THREAD_STACK_SIZE 2048
-
-extern K_THREAD_STACK_DEFINE(accel_thread_stack, ACCEL_THREAD_STACK_SIZE);
-
 struct accel_sensor_data {
-	struct k_thread thread_data;
-	k_tid_t thread_id;
-	bool thread_running;
+	const struct device *dev;
 	uint16_t sampling_period_ms;
-	struct k_work_delayable dwork;
+	struct k_work_delayable fallback_work;
+	struct k_work_delayable stats_work;
+	struct sensor_trigger data_ready_trigger;
 	const struct device *accel_dev;
+	int64_t last_sample_time;
+	int64_t last_data_ready_time;
+	int64_t last_stats_log_time;
+	uint32_t data_ready_callbacks;
+	uint32_t data_ready_samples;
+	uint32_t fallback_samples;
 	//поля стуртури для нахилу
 	sensor_trigger_handler_t warn_handler_tilt;
     const struct sensor_trigger *warn_trigger_tilt;

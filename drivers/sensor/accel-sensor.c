@@ -11,8 +11,6 @@
 // LOG_MODULE_REGISTER(accel_sensor, LOG_LEVEL_DBG);
 LOG_MODULE_REGISTER(accel_sensor, CONFIG_SENSOR_LOG_LEVEL);
 
-K_THREAD_STACK_DEFINE(accel_thread_stack, ACCEL_THREAD_STACK_SIZE);
-
 #if !defined(M_PIf)
 #define M_PIf 3.1415927f
 #endif
@@ -30,6 +28,13 @@ K_THREAD_STACK_DEFINE(accel_thread_stack, ACCEL_THREAD_STACK_SIZE);
 #define ARMING_DELAY_SEC_DIS 1
 #define MIN_WARN_INTERVAL 2000 // ms
 #define STOP_ACCEL_ALARM_INTERVAL 5000
+#define ACCEL_SOURCE_STATS_INTERVAL_MS 10000
+#define ACCEL_FALLBACK_WATCHDOG_MS 2000
+
+enum accel_sample_source {
+	ACCEL_SAMPLE_SOURCE_DATA_READY,
+	ACCEL_SAMPLE_SOURCE_FALLBACK,
+};
 
 static float warn_zone_start_angle = 1.0;
 static float warn_zone_step_angle = 2.0/9.0;
@@ -218,7 +223,6 @@ static bool process_tilt_mode(struct accel_sensor_data *data, const struct devic
 {
 	float pow_cos_theta = cospow2_between_vectors(data->ref_acc_tilt, current_acc);
 	if (pow_cos_theta == 0) {
-		k_work_schedule(&data->dwork, K_MSEC(data->sampling_period_ms));
 		return false;
 	}
 
@@ -633,6 +637,7 @@ static void increase_sensivity_main_timer_handler_move(struct k_timer *timer)
 }
 
 
+#if 0
 void accel_thread(void *dev_ptr, void *arg2, void *arg3)
 {
 
@@ -762,12 +767,143 @@ void accel_thread(void *dev_ptr, void *arg2, void *arg3)
 	}
 	LOG_INF("Accel thread stopped (%s)", dev->name);
 }
+#endif
+
+static void accel_log_source_stats(struct accel_sensor_data *data)
+{
+	data->last_stats_log_time = k_uptime_get();
+	LOG_INF("Accel source: irq_cb=%u irq_samples=%u fallback_samples=%u",
+		data->data_ready_callbacks, data->data_ready_samples,
+		data->fallback_samples);
+}
+
+static void accel_process_sample(const struct device *dev,
+	enum accel_sample_source source)
+{
+	struct accel_sensor_data *data = dev->data;
+	const struct accel_sensor_config *cfg = dev->config;
+	const struct device *adev = cfg->accel_dev;
+	struct sensor_value data_val[3];
+	int64_t now = k_uptime_get();
+	bool process;
+
+	process = data->last_sample_time == 0 ||
+		now - data->last_sample_time >= data->sampling_period_ms;
+
+	if (source == ACCEL_SAMPLE_SOURCE_FALLBACK && !process) {
+		return;
+	}
+
+	if (source == ACCEL_SAMPLE_SOURCE_DATA_READY &&
+		data->fallback_samples > 0) {
+		LOG_DBG("Data-ready sample after fallback: dt=%lld ms",
+			now - data->last_sample_time);
+	}
+
+	if (source == ACCEL_SAMPLE_SOURCE_DATA_READY &&
+		data->last_sample_time != 0 &&
+		now - data->last_sample_time < data->sampling_period_ms) {
+		process = false;
+	}
+
+	if (sensor_sample_fetch(adev) < 0) {
+		return;
+	}
+
+	if (sensor_channel_get(adev, SENSOR_CHAN_ACCEL_XYZ, data_val) < 0) {
+		LOG_ERR("sensor_channel_get failed");
+		return;
+	}
+
+	if (source == ACCEL_SAMPLE_SOURCE_DATA_READY) {
+		data->data_ready_samples++;
+	} else {
+		data->fallback_samples++;
+	}
+
+	if (!process) {
+		return;
+	}
+
+	data->last_sample_time = now;
+
+	float ax = sensor_value_to_double(&data_val[0]) / GRAVITY_MS2;
+	float ay = sensor_value_to_double(&data_val[1]) / GRAVITY_MS2;
+	float az = sensor_value_to_double(&data_val[2]) / GRAVITY_MS2;
+	_Vector3 current_acc = {ax, ay, az};
+
+	data->last_acc_tilt = current_acc;
+
+	if (data->mode_tilt == ACCEL_SENSOR_MODE_DISARMED &&
+		data->mode_move == ACCEL_SENSOR_MODE_DISARMED) {
+		process_disarmed_move(data, dev, current_acc, now);
+		return;
+	}
+
+	bool allowed = true;
+	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED) {
+		data->skip_counter++;
+		allowed = data->skip_counter > 9;
+		if (allowed) {
+			data->skip_counter = 0;
+		}
+	}
+
+	if (data->mode_tilt == ACCEL_SENSOR_MODE_ARMED && allowed) {
+		(void)process_tilt_mode(data, dev, current_acc, now);
+	}
+
+	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED ||
+		data->mode_move == ACCEL_SENSOR_MODE_ALARM) {
+		process_move_mode(data, dev, current_acc, now);
+	}
+}
+
+static void accel_fallback_work_handler(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct accel_sensor_data *data =
+		CONTAINER_OF(dwork, struct accel_sensor_data, fallback_work);
+	int64_t now = k_uptime_get();
+
+	if (data->last_data_ready_time == 0 ||
+		now - data->last_data_ready_time > ACCEL_FALLBACK_WATCHDOG_MS) {
+		accel_process_sample(data->dev, ACCEL_SAMPLE_SOURCE_FALLBACK);
+	}
+	(void)k_work_reschedule(&data->fallback_work,
+		K_MSEC(data->sampling_period_ms));
+}
+
+static void accel_stats_work_handler(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct accel_sensor_data *data =
+		CONTAINER_OF(dwork, struct accel_sensor_data, stats_work);
+
+	accel_log_source_stats(data);
+	(void)k_work_reschedule(&data->stats_work,
+		K_MSEC(ACCEL_SOURCE_STATS_INTERVAL_MS));
+}
+
+static void accel_data_ready_handler(const struct device *adev,
+	const struct sensor_trigger *trig)
+{
+	struct accel_sensor_data *data = dev->data;
+
+	ARG_UNUSED(adev);
+	ARG_UNUSED(trig);
+
+	data->data_ready_callbacks++;
+	data->last_data_ready_time = k_uptime_get();
+	accel_process_sample(data->dev, ACCEL_SAMPLE_SOURCE_DATA_READY);
+}
 
 static int init(const struct device *dev)
 {
 	const struct accel_sensor_config *cfg = dev->config;
 	struct accel_sensor_data *data = dev->data;
 
+	data->dev = dev;
 	LOG_DBG("Initializing Accelerometer Sensor (%s)", dev->name);
 	const struct device *adev = cfg->accel_dev;
 	if (!device_is_ready(adev)) {
@@ -822,19 +958,33 @@ static int init(const struct device *dev)
 	data->summary_acc_move.y = 0;
 	data->summary_acc_move.z = 0;
 	// TODO: Напевно треба перенести в макрос визначення змінної
-	data->thread_running = true;
-	data->thread_id = k_thread_create(
-    &data->thread_data,
-    accel_thread_stack,
-    K_THREAD_STACK_SIZEOF(accel_thread_stack),
-    accel_thread,
-    (void *)dev, NULL, NULL,
-    THREAD_PRIORITY, 0, K_MSEC(1000));
+	data->last_sample_time = 0;
+	data->last_data_ready_time = 0;
+	data->last_stats_log_time = 0;
+	data->data_ready_callbacks = 0;
+	data->data_ready_samples = 0;
+	data->fallback_samples = 0;
+	k_work_init_delayable(&data->fallback_work, accel_fallback_work_handler);
+	k_work_init_delayable(&data->stats_work, accel_stats_work_handler);
 
-	k_thread_name_set(data->thread_id, "accel_thread");
-	LOG_INF("Accelerometer thread started");
+	data->data_ready_trigger.chan = SENSOR_CHAN_ACCEL_XYZ;
+	data->data_ready_trigger.type = SENSOR_TRIG_DATA_READY;
+	rc = sensor_trigger_set(adev, &data->data_ready_trigger,
+		accel_data_ready_handler);
+	if (rc) {
+		LOG_WRN("Accelerometer data-ready trigger unavailable: %d", rc);
+	}
 
-	return rc;
+	(void)k_work_reschedule(&data->fallback_work,
+		K_MSEC(data->sampling_period_ms));
+	(void)k_work_reschedule(&data->stats_work,
+		K_MSEC(ACCEL_SOURCE_STATS_INTERVAL_MS));
+
+	LOG_INF("Accelerometer sampling started%s",
+		rc == 0 ? " with data-ready trigger and timer fallback" :
+			  " with timer fallback only");
+
+	return 0;
 }
 
 #if 0
