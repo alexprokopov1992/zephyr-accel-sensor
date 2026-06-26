@@ -772,7 +772,7 @@ void accel_thread(void *dev_ptr, void *arg2, void *arg3)
 static void accel_log_source_stats(struct accel_sensor_data *data)
 {
 	data->last_stats_log_time = k_uptime_get();
-	LOG_INF("Accel source: irq_cb=%u irq_samples=%u fallback_samples=%u",
+	LOG_DBG("Accel source: irq_cb=%u irq_samples=%u fallback_samples=%u",
 		data->data_ready_callbacks, data->data_ready_samples,
 		data->fallback_samples);
 }
