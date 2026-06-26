@@ -36,11 +36,25 @@ static float warn_zone_step_angle = 2.0/9.0;
 static float max_angle = 10.00;
 static const float cos_pow_0_5  = 0.999961923;
 
-static float border_move = 0.0005;
+/*
+ * Baseline may follow slow changes while the relative gravity magnitude stays
+ * within 3 mg.  MOVE event thresholds must therefore start sufficiently above
+ * this dead band, otherwise the most sensitive levels would be absorbed by
+ * baseline adaptation before WARN/MAIN evaluation.
+ */
+static const float border_move = 0.003f;
 
-static float warn_zone_accel_mult = 0.001;
-static float warn_zone_step_accel_mult_step = 0.001;
-static float main_zone_max_mult = 0.1;
+/*
+ * MOVE WARN levels, from the highest to the lowest sensitivity:
+ *   6, 8, 10, 12, 14, 16, 18, 20, 22, 24 mg.
+ *
+ * The minimum threshold is 2 * border_move.  The default user setting 50
+ * selects index 5, i.e. 16 mg.
+ */
+static const float warn_zone_accel_mult = 0.006f;
+static const float warn_zone_step_accel_mult_step = 0.002f;
+static const float main_zone_max_mult = 0.100f;
+#define MAIN_ZONE_MOVE_GAP_STEPS 2
 
 const struct device *const dev = DEVICE_DT_GET(DT_ALIAS(accel0));
 
@@ -158,44 +172,46 @@ static bool both_mode_disarmed(struct accel_sensor_data *data)
 
 static void process_disarmed_move(struct accel_sensor_data *data, const struct device *dev, _Vector3 current_acc, int64_t current_time)
 {
-	if (data->samples_count_move_disarmed >= MOVE_SENSOR_SAMPLE_COUNT){
-			data->last_acc_move_disarmed.x = data->summary_acc_move_disarmed.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
-			data->last_acc_move_disarmed.y = data->summary_acc_move_disarmed.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
-			data->last_acc_move_disarmed.z = data->summary_acc_move_disarmed.z / (float)MOVE_SENSOR_SAMPLE_COUNT;
-			data->summary_acc_move_disarmed.x = 0;
-			data->summary_acc_move_disarmed.y = 0;
-			data->summary_acc_move_disarmed.z = 0;
-			data->samples_count_move_disarmed = 0;
+	/* Always include the current sample before deciding whether the window is full. */
+	data->summary_acc_move_disarmed.x += current_acc.x;
+	data->summary_acc_move_disarmed.y += current_acc.y;
+	data->summary_acc_move_disarmed.z += current_acc.z;
+	data->samples_count_move_disarmed++;
 
-			float acc_len = vector_length(data->last_acc_move_disarmed);
-			_Vector3 accelerate = {data->last_acc_move_disarmed.x - data->ref_acc_move_disarmed.x, data->last_acc_move_disarmed.y - data->ref_acc_move_disarmed.y, data->last_acc_move_disarmed.z - data->ref_acc_move_disarmed.z};
-			float accel = vector_length(accelerate);
+	if (data->samples_count_move_disarmed < MOVE_SENSOR_SAMPLE_COUNT) {
+		return;
+	}
 
-			if (data->gravity_disarmed > 0)
-			{
-				float change = (data->gravity_disarmed - acc_len)/data->gravity_disarmed;
-				if (change < border_move && change > -border_move)
-				{
-					data->gravity_disarmed = acc_len;
-					data->ref_acc_move_disarmed = data->last_acc_move_disarmed;
-				} else {
-					if (accel > data->warn_zone_move[data->selected_warn_zone_move]*data->gravity_disarmed) {
-						if (current_time - data->last_trigger_time_disarmed_move > MIN_WARN_INTERVAL) {
-							LOG_DBG("Disarmed move triggered");
-							LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f gravity: %10.6f last_acc: %10.6f", (double)data->last_acc_move_disarmed.x, (double)data->last_acc_move_disarmed.y, (double)data->last_acc_move_disarmed.z, (double)accel, (double)data->gravity_disarmed, (double)acc_len);
-							data->last_trigger_time_disarmed_move = current_time;
-							data->disarm_move_handler(dev, data->disarm_move_trigger);
-						}
-					}
+	data->last_acc_move_disarmed.x = data->summary_acc_move_disarmed.x / (float)data->samples_count_move_disarmed;
+	data->last_acc_move_disarmed.y = data->summary_acc_move_disarmed.y / (float)data->samples_count_move_disarmed;
+	data->last_acc_move_disarmed.z = data->summary_acc_move_disarmed.z / (float)data->samples_count_move_disarmed;
+	data->summary_acc_move_disarmed.x = 0;
+	data->summary_acc_move_disarmed.y = 0;
+	data->summary_acc_move_disarmed.z = 0;
+	data->samples_count_move_disarmed = 0;
+
+	float acc_len = vector_length(data->last_acc_move_disarmed);
+	_Vector3 accelerate = {data->last_acc_move_disarmed.x - data->ref_acc_move_disarmed.x, data->last_acc_move_disarmed.y - data->ref_acc_move_disarmed.y, data->last_acc_move_disarmed.z - data->ref_acc_move_disarmed.z};
+	float accel = vector_length(accelerate);
+
+	if (data->gravity_disarmed > 0)
+	{
+		float change = (data->gravity_disarmed - acc_len)/data->gravity_disarmed;
+		if (change < border_move && change > -border_move)
+		{
+			data->gravity_disarmed = acc_len;
+			data->ref_acc_move_disarmed = data->last_acc_move_disarmed;
+		} else {
+			if (accel > data->warn_zone_move[data->selected_warn_zone_move]*data->gravity_disarmed) {
+				if (current_time - data->last_trigger_time_disarmed_move > MIN_WARN_INTERVAL) {
+					LOG_DBG("Disarmed move triggered");
+					LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f gravity: %10.6f last_acc: %10.6f", (double)data->last_acc_move_disarmed.x, (double)data->last_acc_move_disarmed.y, (double)data->last_acc_move_disarmed.z, (double)accel, (double)data->gravity_disarmed, (double)acc_len);
+					data->last_trigger_time_disarmed_move = current_time;
+					data->disarm_move_handler(dev, data->disarm_move_trigger);
 				}
 			}
-
-		} else {
-			data->summary_acc_move_disarmed.x += current_acc.x;
-			data->summary_acc_move_disarmed.y += current_acc.y;
-			data->summary_acc_move_disarmed.z += current_acc.z;
-			data->samples_count_move_disarmed++;
 		}
+	}
 }
 
 static bool process_tilt_mode(struct accel_sensor_data *data, const struct device *dev, _Vector3 current_acc, int64_t current_time)
@@ -235,62 +251,65 @@ static bool process_tilt_mode(struct accel_sensor_data *data, const struct devic
 
 static void process_move_mode(struct accel_sensor_data *data, const struct device *dev, _Vector3 current_acc, int64_t current_time)
 {
-	if (data->samples_count_move >= MOVE_SENSOR_SAMPLE_COUNT){
-			data->last_acc_move.x = data->summary_acc_move.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
-			data->last_acc_move.y = data->summary_acc_move.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
-			data->last_acc_move.z = data->summary_acc_move.z / (float)MOVE_SENSOR_SAMPLE_COUNT;
-			data->summary_acc_move.x = 0;
-			data->summary_acc_move.y = 0;
-			data->summary_acc_move.z = 0;
-			data->samples_count_move = 0;
+	/* Always include the current sample before deciding whether the window is full. */
+	data->summary_acc_move.x += current_acc.x;
+	data->summary_acc_move.y += current_acc.y;
+	data->summary_acc_move.z += current_acc.z;
+	data->samples_count_move++;
 
-			if (data->mode_move == ACCEL_SENSOR_MODE_ARMED)
+	if (data->samples_count_move < MOVE_SENSOR_SAMPLE_COUNT) {
+		return;
+	}
+
+	data->last_acc_move.x = data->summary_acc_move.x / (float)data->samples_count_move;
+	data->last_acc_move.y = data->summary_acc_move.y / (float)data->samples_count_move;
+	data->last_acc_move.z = data->summary_acc_move.z / (float)data->samples_count_move;
+	data->summary_acc_move.x = 0;
+	data->summary_acc_move.y = 0;
+	data->summary_acc_move.z = 0;
+	data->samples_count_move = 0;
+
+	if (data->mode_move == ACCEL_SENSOR_MODE_ARMED)
+	{
+		float acc_len = vector_length(data->last_acc_move);
+		_Vector3 accelerate = {data->last_acc_move.x - data->ref_acc_move.x, data->last_acc_move.y - data->ref_acc_move.y, data->last_acc_move.z - data->ref_acc_move.z};
+		float accel = vector_length(accelerate);
+		if (data->gravity > 0)
+		{
+			float change = (data->gravity - acc_len)/data->gravity;
+			if (change < border_move && change > -border_move)
 			{
-				float acc_len = vector_length(data->last_acc_move);
-				_Vector3 accelerate = {data->last_acc_move.x - data->ref_acc_move.x, data->last_acc_move.y - data->ref_acc_move.y, data->last_acc_move.z - data->ref_acc_move.z};
-				float accel = vector_length(accelerate);
-				if (data->gravity > 0)
+				data->gravity = acc_len;
+				data->ref_acc_move = data->last_acc_move;
+			} else {
+				if (accel > data->main_zone_move[data->current_main_zone_move]*data->gravity && data->main_zone_active_move)
 				{
-					float change = (data->gravity - acc_len)/data->gravity;
-					if (change < border_move && change > -border_move)
-					{
-						data->gravity = acc_len;
-						data->ref_acc_move = data->last_acc_move;
-					} else {
-						if (accel > data->main_zone_move[data->current_main_zone_move]*data->gravity && data->main_zone_active_move)
-						{
-							if (!data->max_main_alert_level_move){
-								data->mode_move = ACCEL_SENSOR_MODE_ALARM;
-								coarsering_move(data, 1);
-								LOG_DBG("Move Main zone move triggered");
-								data->last_trigger_time_main_move = current_time;
-								data->main_handler_move(dev, data->main_trigger_move);
-							}
-							k_timer_start(&data->increase_sensivity_main_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
-						} else {
-							if (accel > data->warn_zone_move[data->current_warn_zone_move]*data->gravity && data->warn_zone_active_move) {
-								if (!data->max_warn_alert_level_move) {
-									if (current_time - data->last_trigger_time_warn_move > MIN_WARN_INTERVAL) {
-										coarsering_move(data, 0);
-										LOG_DBG("Move Warn zone move triggered");
-										data->last_trigger_time_warn_move = current_time;
-										data->warn_handler_move(dev, data->warn_trigger_move);
-									}
-								}
-								k_timer_start(&data->increase_sensivity_warn_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+					if (!data->max_main_alert_level_move){
+						data->mode_move = ACCEL_SENSOR_MODE_ALARM;
+						coarsering_move(data, 1);
+						LOG_DBG("Move Main zone move triggered");
+						data->last_trigger_time_main_move = current_time;
+						data->main_handler_move(dev, data->main_trigger_move);
+					}
+					k_timer_start(&data->increase_sensivity_main_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
+				} else {
+					if (accel > data->warn_zone_move[data->current_warn_zone_move]*data->gravity && data->warn_zone_active_move) {
+						if (!data->max_warn_alert_level_move) {
+							if (current_time - data->last_trigger_time_warn_move > MIN_WARN_INTERVAL) {
+								coarsering_move(data, 0);
+								LOG_DBG("Move Warn zone move triggered");
+								data->last_trigger_time_warn_move = current_time;
+								data->warn_handler_move(dev, data->warn_trigger_move);
 							}
 						}
+						k_timer_start(&data->increase_sensivity_warn_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
 					}
-
-					// LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f gravity: %10.6f last_acc: %10.6f", (double)data->last_acc_move.x, (double)data->last_acc_move.y, (double)data->last_acc_move.z, (double)accel, (double)data->gravity, (double)acc_len);
 				}
-			}	
-		} else {
-			data->summary_acc_move.x += current_acc.x;
-			data->summary_acc_move.y += current_acc.y;
-			data->summary_acc_move.z += current_acc.z;
-			data->samples_count_move++;
+			}
+
+			// LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f gravity: %10.6f last_acc: %10.6f", (double)data->last_acc_move.x, (double)data->last_acc_move.y, (double)data->last_acc_move.z, (double)accel, (double)data->gravity, (double)acc_len);
 		}
+	}
 }
 
 static void init_warn_zones_tilt(const struct device *dev)
@@ -324,11 +343,22 @@ static void create_warn_zones_move(const struct device *dev)
 static void create_main_zones_move(const struct device *dev, int warn_zone)
 {
 	struct accel_sensor_data *data = dev->data;
-	float start_mult = warn_zone_step_accel_mult_step * (warn_zone + 2);
-	float step = (main_zone_max_mult - start_mult) / (float)9.0;
+
+	/*
+	 * MAIN starts two WARN steps above the currently selected WARN threshold.
+	 * Include warn_zone_accel_mult here: the old formula implicitly assumed
+	 * that the WARN table started at one step and became wrong as soon as the
+	 * WARN range was moved above the noise/baseline band.
+	 */
+	float selected_warn_mult = warn_zone_accel_mult +
+			warn_zone_step_accel_mult_step * (float)warn_zone;
+	float start_mult = selected_warn_mult +
+			warn_zone_step_accel_mult_step * MAIN_ZONE_MOVE_GAP_STEPS;
+	float step = (main_zone_max_mult - start_mult) / 9.0f;
+
 	for (int i = 0; i < 10; i++)
 	{
-		data->main_zone_move[i] = start_mult + step * i;
+		data->main_zone_move[i] = start_mult + step * (float)i;
 	}
 }
 
@@ -654,45 +684,7 @@ void accel_thread(void *dev_ptr, void *arg2, void *arg3)
 		data->last_acc_tilt = current_acc;
 		
 		if (data->mode_tilt == ACCEL_SENSOR_MODE_DISARMED && data->mode_move == ACCEL_SENSOR_MODE_DISARMED) {
-			int64_t current_time = k_uptime_get();
-			if (data->samples_count_move_disarmed >= MOVE_SENSOR_SAMPLE_COUNT){
-				data->last_acc_move_disarmed.x = data->summary_acc_move_disarmed.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
-				data->last_acc_move_disarmed.y = data->summary_acc_move_disarmed.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
-				data->last_acc_move_disarmed.z = data->summary_acc_move_disarmed.z / (float)MOVE_SENSOR_SAMPLE_COUNT;
-				data->summary_acc_move_disarmed.x = 0;
-				data->summary_acc_move_disarmed.y = 0;
-				data->summary_acc_move_disarmed.z = 0;
-				data->samples_count_move_disarmed = 0;
-
-				float acc_len = vector_length(data->last_acc_move_disarmed);
-				_Vector3 accelerate = {data->last_acc_move_disarmed.x - data->ref_acc_move_disarmed.x, data->last_acc_move_disarmed.y - data->ref_acc_move_disarmed.y, data->last_acc_move_disarmed.z - data->ref_acc_move_disarmed.z};
-				float accel = vector_length(accelerate);
-
-				if (data->gravity_disarmed > 0)
-				{
-					float change = (data->gravity_disarmed - acc_len)/data->gravity_disarmed;
-					if (change < border_move && change > -border_move)
-					{
-						data->gravity_disarmed = acc_len;
-						data->ref_acc_move_disarmed = data->last_acc_move_disarmed;
-					} else {
-						if (accel > data->warn_zone_move[data->selected_warn_zone_move]*data->gravity_disarmed) {
-							if (current_time - data->last_trigger_time_disarmed_move > MIN_WARN_INTERVAL) {
-								LOG_DBG("Disarmed move triggered");
-								LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f gravity: %10.6f last_acc: %10.6f", (double)data->last_acc_move_disarmed.x, (double)data->last_acc_move_disarmed.y, (double)data->last_acc_move_disarmed.z, (double)accel, (double)data->gravity_disarmed, (double)acc_len);
-								data->last_trigger_time_disarmed_move = current_time;
-								data->disarm_move_handler(dev, data->disarm_move_trigger);
-							}
-						}
-					}
-				}
-
-			} else {
-				data->summary_acc_move_disarmed.x += ax;
-				data->summary_acc_move_disarmed.y += ay;
-				data->summary_acc_move_disarmed.z += az;
-				data->samples_count_move_disarmed++;
-			}
+			process_disarmed_move(data, dev, current_acc, k_uptime_get());
 			continue;
 		}
 
@@ -750,66 +742,10 @@ void accel_thread(void *dev_ptr, void *arg2, void *arg3)
 			// );
 		}
 
-		if (data->mode_move == ACCEL_SENSOR_MODE_ARMED || data->mode_move == ACCEL_SENSOR_MODE_ALARM){
-
-			int64_t current_time = k_uptime_get();
-			if (data->samples_count_move >= MOVE_SENSOR_SAMPLE_COUNT){
-				data->last_acc_move.x = data->summary_acc_move.x / (float)MOVE_SENSOR_SAMPLE_COUNT;
-				data->last_acc_move.y = data->summary_acc_move.y / (float)MOVE_SENSOR_SAMPLE_COUNT;
-				data->last_acc_move.z = data->summary_acc_move.z / (float)MOVE_SENSOR_SAMPLE_COUNT;
-				data->summary_acc_move.x = 0;
-				data->summary_acc_move.y = 0;
-				data->summary_acc_move.z = 0;
-				data->samples_count_move = 0;
-
-				if (data->mode_move == ACCEL_SENSOR_MODE_ARMED)
-				{
-					float acc_len = vector_length(data->last_acc_move);
-					_Vector3 accelerate = {data->last_acc_move.x - data->ref_acc_move.x, data->last_acc_move.y - data->ref_acc_move.y, data->last_acc_move.z - data->ref_acc_move.z};
-					float accel = vector_length(accelerate);
-					if (data->gravity > 0)
-					{
-						float change = (data->gravity - acc_len)/data->gravity;
-						if (change < border_move && change > -border_move)
-						{
-							data->gravity = acc_len;
-							data->ref_acc_move = data->last_acc_move;
-						} else {
-							if (accel > data->main_zone_move[data->current_main_zone_move]*data->gravity && data->main_zone_active_move)
-							{
-								if (!data->max_main_alert_level_move){
-									data->mode_move = ACCEL_SENSOR_MODE_ALARM;
-									coarsering_move(data, 1);
-									LOG_DBG("Move Main zone move triggered");
-									data->last_trigger_time_main_move = current_time;
-									data->main_handler_move(dev, data->main_trigger_move);
-								}
-								k_timer_start(&data->increase_sensivity_main_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
-							} else {
-								if (accel > data->warn_zone_move[data->current_warn_zone_move]*data->gravity && data->warn_zone_active_move) {
-									if (!data->max_warn_alert_level_move) {
-										if (current_time - data->last_trigger_time_warn_move > MIN_WARN_INTERVAL) {
-											coarsering_move(data, 0);
-											LOG_DBG("Move Warn zone move triggered");
-											data->last_trigger_time_warn_move = current_time;
-											data->warn_handler_move(dev, data->warn_trigger_move);
-										}
-									}
-									k_timer_start(&data->increase_sensivity_warn_timer_move, K_SECONDS(INCREASE_SENSIVITY_TIME), K_NO_WAIT);
-								}
-							}
-						}
-
-						// LOG_DBG("Move sensor value X:%10.6f Y:%10.6f Z:%10.6f accel: %10.6f gravity: %10.6f last_acc: %10.6f", (double)data->last_acc_move.x, (double)data->last_acc_move.y, (double)data->last_acc_move.z, (double)accel, (double)data->gravity, (double)acc_len);
-					}
-				}	
-			} else {
-				data->summary_acc_move.x += ax;
-				data->summary_acc_move.y += ay;
-				data->summary_acc_move.z += az;
-				data->samples_count_move++;
-			}
+		if (data->mode_move == ACCEL_SENSOR_MODE_ARMED || data->mode_move == ACCEL_SENSOR_MODE_ALARM) {
+			process_move_mode(data, dev, current_acc, k_uptime_get());
 		}
+
 
 		// force_send_state();
 
@@ -861,6 +797,10 @@ static int init(const struct device *dev)
 	k_timer_init(&data->increase_sensivity_timer_tilt, increase_sensivity_timer_handler_tilt, NULL);
 	k_timer_init(&data->alarm_timer_tilt, alarm_timer_handler_tilt, NULL);
 	//переміщення
+	data->selected_warn_zone_move = 5;
+	data->current_warn_zone_move = 5;
+	data->selected_main_zone_move = 5;
+	data->current_main_zone_move = 5;
 	create_warn_zones_move(dev);
 	create_main_zones_move(dev, data->selected_warn_zone_move);
 	data->max_warn_alert_level_move = false;
@@ -868,10 +808,6 @@ static int init(const struct device *dev)
 	data->warn_zone_active_move = true;
 	data->main_zone_active_move = true;
 	data->mode_move = ACCEL_SENSOR_MODE_DISARMED;
-	data->selected_warn_zone_move = 5;
-	data->current_warn_zone_move = 5;
-	data->selected_main_zone_move = 5;
-	data->current_main_zone_move = 5;
 	k_timer_init(&data->refresh_current_pos_timer_move, refresh_current_pos_timer_handler_move, NULL);
 	k_timer_init(&data->increase_sensivity_warn_timer_move, increase_sensivity_warn_timer_handler_move, NULL);
 	k_timer_init(&data->increase_sensivity_main_timer_move, increase_sensivity_main_timer_handler_move, NULL);
