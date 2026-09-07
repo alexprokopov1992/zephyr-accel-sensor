@@ -5,7 +5,7 @@
 
 config ZEPHYR_ACCEL_SENSOR
 	bool "Accelerometer Sensor"
-	select I2C
+	select SPI
 	help
 	  Enable driver for Accelerometer Sensor. Tilt, Move, etc.
 

@@ -2,17 +2,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/i2c.h>
-
-#define MMA8652_ADDR 0x1D
-#define CTRL_REG1      0x2A
-#define FF_MT_CFG      0x15
-#define FF_MT_THS      0x17
-#define FF_MT_COUNT    0x18
-#define CTRL_REG4      0x2D
-#define CTRL_REG5      0x2E
-#define F_SETUP        0x09
-
+#include <zephyr/drivers/sensor.h>
 
 enum accel_sensor_mode {
     ACCEL_SENSOR_MODE_ARMED=0,
@@ -45,7 +35,6 @@ enum accel_sensor_channel {
 };
 
 struct accel_sensor_config {
-	// const struct i2c_dt_spec bus;
 	const struct device *accel_dev;
 };
 
@@ -54,9 +43,18 @@ typedef struct {
 } _Vector3;
 
 struct accel_sensor_data {
+	const struct device *dev;
 	uint16_t sampling_period_ms;
-	struct k_work_delayable dwork;
+	struct k_work_delayable fallback_work;
+	struct k_work_delayable stats_work;
+	struct sensor_trigger data_ready_trigger;
 	const struct device *accel_dev;
+	int64_t last_sample_time;
+	int64_t last_data_ready_time;
+	int64_t last_stats_log_time;
+	uint32_t data_ready_callbacks;
+	uint32_t data_ready_samples;
+	uint32_t fallback_samples;
 	//поля стуртури для нахилу
 	sensor_trigger_handler_t warn_handler_tilt;
     const struct sensor_trigger *warn_trigger_tilt;
